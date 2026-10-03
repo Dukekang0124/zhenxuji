@@ -36,14 +36,48 @@ jobs:
       - name: Build web assets into www/
         run: npm run build:web
 
-      - name: Create android project (not committed — generated each run)
+      # 🔴 2026-10-03 决策（方案 A）：android/ 已入库，CI **不再重建工程**，只同步 web 产物。
+      #
+      # 历史：这里原先是 `rm -rf android && capacitor add android`，
+      #   每次生成一份**全新的 stock 工程**，而 android/ 整体在 .gitignore 里。
+      #   后果：本地这份定制过的构建配置（签名配置 / v3 签名 / R8 排除 WebView JS 桥接 /
+      #   keystore 路径校验 / 中文路径 overridePathCheck）**CI 完全用不到** ——
+      #   CI 产出的包与本地根本不是同一套构建，且 stock 工程里没有读 keystore 的逻辑，
+      #   签名必然失败（v0.6.0/0.6.1/0.6.2 三代 CI 全红的深层原因之一）。
+      #
+      # 现在：`cap copy` 只做一件事 —— 把 www/ 同步进 android/app/src/main/assets/public/，
+      #   不触碰任何构建脚本。于是 **CI 与本地跑的是同一套 build.gradle**，
+      #   「本地能出包、CI 出不了」这类分歧从结构上消失。
+      #   注：assets/ 在 .gitignore 里（它是产物副本），所以这一步每次都必须跑。
+      - name: Sync web assets into committed android project
         run: |
-          rm -rf android
-          node ./node_modules/@capacitor/cli/bin/capacitor add android > cap_add.log 2>&1 || echo "CAP_FAILED=1" >> "$GITHUB_ENV"
+          rm -rf android/app/src/main/assets/public
+          # 🔴 注意：cap copy 失败时**退出码仍然是 0**（2026-10-03 实测：www/ 缺失时
+          #    它打印 "× copy android - failed!" 却 exit 0）。所以 `|| ...` 兜不住错误，
+          #    不能把它的退出码当闸门。下面两条 test 断言才是唯一的硬校验。
+          set +e
+          node ./node_modules/@capacitor/cli/bin/capacitor copy android > cap_copy.log 2>&1
+          CAP_RC=$?
+          set -e
+          cat cap_copy.log
           test -f android/app/build.gradle || {
-            echo "::error::log-tail:$(tail -c 350 cap_add.log 2>/dev/null | tr '\n' '~')"
+            echo "::error::android/app/build.gradle 缺失 —— 入库的工程不完整"
             exit 1
           }
+          test -f android/app/src/main/assets/public/index.html || {
+            echo "::error::cap copy 退出码=$CAP_RC 但产物未同步进 assets/public，APK 里会是空壳"
+            echo "::error::log-tail:$(tail -c 350 cap_copy.log 2>/dev/null | tr '\n' '~')"
+            exit 1
+          }
+          # 🔴 关键自检：CI 用的 build.gradle 必须就是仓库里那份（含签名逻辑），
+          #    而不是 cap 重新生成的 stock 版本。缺了这段校验，
+          #    「哪天有人改回 cap add」会静默退化成两套构建配置。
+          grep -q "keystoreProps" android/app/build.gradle || {
+            echo "::error::build.gradle 里没有 keystoreProps —— 这不是仓库里那份定制配置"
+            exit 1
+          }
+          echo "工程与 web 产物均已就位"
+          grep -E "versionCode|versionName" android/app/build.gradle
 
       # 🔴 帧叙集核心：相册权限。方案的「部分照片 / 完整相册两级权限」在 Android 上
       #    对应两级真实 API，漏任一权限都会让相册扫描直接空返回：
@@ -52,11 +86,29 @@ jobs:
       #      • READ_EXTERNAL_STORAGE        —— API ≤32 旧模型（必须带 maxSdkVersion，否则
       #                                        Android 13+ 上被系统直接忽略并可能触发商店审核问题）
       #    注：MVP 只处理图片，不申请 READ_MEDIA_VIDEO（视频直接跳过）。
-      - name: Inject photo library permissions
+      #
+      # 🔴 2026-10-03 起从「注入」改为「校验」：
+      #    android/ 入库后，AndroidManifest.xml 就是**权威源**，权限已在仓库里。
+      #    继续用 sed 注入只会制造"两处都在改同一件事"的假象 ——
+      #    将来有人改了入库的 Manifest，CI 这边可能又把它 sed 回去，且都不报错。
+      #    改为断言校验：缺任一权限直接失败，把"权限丢了"挡在出包前。
+      - name: Verify photo library permissions
         run: |
           M=android/app/src/main/AndroidManifest.xml
-          grep -q "READ_MEDIA_IMAGES" $M || sed -i 's#<uses-permission android:name="android.permission.INTERNET"#<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <uses-permission android:name="android.permission.INTERNET"#' $M
-          grep -o 'android.permission.[A-Z_]*' $M | sort -u
+          MISSING=""
+          for P in READ_MEDIA_IMAGES READ_MEDIA_VISUAL_USER_SELECTED ACCESS_NETWORK_STATE INTERNET; do
+            grep -q "android.permission.$P" "$M" || MISSING="$MISSING $P"
+          done
+          # READ_EXTERNAL_STORAGE 必须带 maxSdkVersion，否则 Android 13+ 上被系统忽略
+          grep -qE 'READ_EXTERNAL_STORAGE[^>]*maxSdkVersion' "$M" \
+            || MISSING="$MISSING READ_EXTERNAL_STORAGE(缺maxSdkVersion)"
+          if [ -n "$MISSING" ]; then
+            echo "::error title=permission-missing::AndroidManifest 缺少权限：$MISSING"
+            echo "::error::相册扫描会直接空返回（帧叙集核心功能失效），已中止出包"
+            exit 1
+          fi
+          echo "相册权限齐全："
+          grep -o 'android.permission.[A-Z_]*' "$M" | sort -u
 
       - name: Resolve version from index.html (single source of truth)
         id: ver
@@ -70,9 +122,44 @@ jobs:
 
       - name: Stamp versionName & versionCode
         run: |
-          sed -i "s/versionCode 1/versionCode ${{ steps.ver.outputs.code }}/" android/app/build.gradle
-          sed -i "s/versionName \"1.0\"/versionName \"${{ steps.ver.outputs.version }}\"/" android/app/build.gradle
-          grep -E "versionCode|versionName" android/app/build.gradle
+          BG=android/app/build.gradle
+          # 🔴 用「广义匹配」而不是原来的 `s/versionCode 1/...` ：
+          #    android/ 入库后，CI 拿到的**就是仓库里那份** build.gradle，
+          #    其中已经写着 `versionCode 602` / `versionName "0.6.2"`，
+          #    旧模式 `versionCode 1` 会一条都匹配不到 → sed 静默不生效 →
+          #    CI 出的包版本号仍是仓库里那个值。如果恰好没改，看着"正常"；
+          #    一旦 index.html 已升版而 build.gradle 没升，就会出**版本号错位的包**，
+          #    而且没有任何报错。这类"静默不生效"必须用结果校验兜住。
+          sed -i -E "s/^([[:space:]]*)versionCode[[:space:]]+[0-9]+/\1versionCode ${{ steps.ver.outputs.code }}/" "$BG"
+          sed -i -E "s/^([[:space:]]*)versionName[[:space:]]+\"[^\"]*\"/\1versionName \"${{ steps.ver.outputs.version }}\"/" "$BG"
+          grep -E "versionCode|versionName" "$BG"
+
+          # 结果校验：stamp 必须真的生效，且与 index.html 解析出的值一致
+          #
+          # 🔴 必须**先剥掉注释行再解析**。否则会假绿：
+          #    build.gradle 里满是提到 versionCode / versionName 的注释，
+          #    `grep -oE 'versionCode[[:space:]]+[0-9]+'` 会连注释一起匹配。
+          #    实测反证：把真行注释掉、并把注释里的数字改成与期望值相同时，
+          #    解析结果照样等于期望值 → 闸门静默失效（真实版本号已丢失却判通过）。
+          #    这类"仪器读到了注释而非事实"的假绿，是本项目反复踩到的同一类坑。
+          NONCOMMENT=$(grep -vE '^[[:space:]]*(//|/\*|\*)' "$BG")
+          GOT_CODE=$(printf '%s\n' "$NONCOMMENT" | grep -oE 'versionCode[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1)
+          GOT_NAME=$(printf '%s\n' "$NONCOMMENT" | grep -oE 'versionName[[:space:]]+"[^"]*"' | grep -oE '"[^"]*"' | tr -d '"' | head -1)
+          WANT_CODE="${{ steps.ver.outputs.code }}"
+          WANT_NAME="${{ steps.ver.outputs.version }}"
+          # 非空前置保护：解析不到值时 GOT_CODE 为空，必须显式判失败，
+          # 不能依赖"空字符串 != 期望值"这种巧合来拦住。
+          if [ -z "$GOT_CODE" ] || [ -z "$GOT_NAME" ]; then
+            echo "::error title=version-stamp-not-found::在 build.gradle 的非注释行里找不到 versionCode/versionName"
+            echo "::error::解析到 versionCode='${GOT_CODE}' versionName='${GOT_NAME}'"
+            exit 1
+          fi
+          if [ "$GOT_CODE" != "$WANT_CODE" ] || [ "$GOT_NAME" != "$WANT_NAME" ]; then
+            echo "::error title=version-stamp-mismatch::build.gradle 版本号未被正确写入"
+            echo "::error::期望 ${WANT_NAME}/${WANT_CODE}，实际 ${GOT_NAME}/${GOT_CODE}"
+            exit 1
+          fi
+          echo "版本号已对齐：${GOT_NAME} / ${GOT_CODE}"
 
       - uses: actions/setup-java@v4
         with:
@@ -81,6 +168,23 @@ jobs:
 
       - name: Grant gradlew
         run: chmod +x android/gradlew
+
+      # 🔴 local.properties 不入库（每个机器 SDK 路径不同），所以 CI 上必须靠
+      #    runner 自带的 ANDROID_HOME / ANDROID_SDK_ROOT。这里显式校验一次：
+      #    runner 镜像变动导致 SDK 缺失时，能给出"缺 SDK"这句人话，
+      #    而不是让 gradle 抛一堆找不到 android.jar 的晦涩异常。
+      - name: Verify Android SDK is available
+        run: |
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK" ] || [ ! -d "$SDK" ]; then
+            echo "::error title=no-android-sdk::runner 未提供 Android SDK（ANDROID_HOME/ANDROID_SDK_ROOT 均空）"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK"
+          ls "$SDK" | head -10
+          # build-tools 与 platforms 必须存在，否则 compileSdk 解析会失败
+          test -d "$SDK/build-tools"  || { echo "::error::缺 $SDK/build-tools"; exit 1; }
+          test -d "$SDK/platforms"    || { echo "::error::缺 $SDK/platforms"; exit 1; }
 
       # 🔴 固定 keystore：签名不一致 = 无法覆盖安装 = WebView 里的本地数据全丢。
       #

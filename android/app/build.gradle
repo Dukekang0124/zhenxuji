@@ -1,0 +1,110 @@
+apply plugin: 'com.android.application'
+
+// 🔴 签名配置从 keystore.properties 读（该文件不入库，见 android/.gitignore）。
+//    读不到时 release 会退回 debug 签名 —— 这是"release 包能装但上不了架"的常见坑，
+//    所以缺失时直接 failFast，不静默降级。
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+} else if (gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }) {
+    throw new GradleException(
+        "缺少 keystore.properties：release 构建必须签名。请在 android/ 下创建该文件，\n" +
+        "内容见项目文档 09-验收上线/。为避免误出未签名包，已中止构建。")
+}
+
+android {
+    namespace = "app.zhenxuji.pwa"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "app.zhenxuji.pwa"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // versionCode 必须单调递增，Google Play 与系统安装包都靠它判升级。
+        // 规则 MA*10000 + MI*100 + PA → 0.5.0 = 500
+        // ⚠️ 历史坑：v0.4.0 出包时这里仍写着 301（= 0.3.1 的码），
+        //    版本号没跟着 versionName 走 → 已装 0.3.1 的机器会判定"同版本/降级"，
+        //    升级装不上。改 versionName 时必须同步算一次 versionCode。
+        versionCode 602
+        versionName "0.6.2"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (keystoreProps['storeFile']) {
+                def store = rootProject.file(keystoreProps['storeFile'])
+                // 🔴 光判断 storeFile 这个 key 非空不够：路径写错层数时文件并不存在，
+                //    而 AGP 在后面才报错，报的还是一堆无关的字节码异常，很难定位。
+                if (!store.exists()) {
+                    throw new GradleException(
+                        "找不到签名密钥：${store.absolutePath}\n" +
+                        "storeFile 是相对 android/ 目录的，请核对层数（当前 android/ 到 知识管理/ 是 6 层）。")
+                }
+                storeFile store
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+                // v3 签名：支持密钥轮换（key rotation）。AGP 默认只开 v2，
+                // 将来换密钥时旧包还能被新签名覆盖，不至于让用户装不上更新。
+                enableV1Signing false
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+        release {
+            // 资源压缩：能明显减小包体（Canvas/JS 大头就在 assets）
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystoreProps['storeFile']) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+    // 🔴 排除清单：WebView 里的 JS 桥接类被混淆会直接崩在启动页
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/*.kotlin_module', 'META-INF/DEPENDENCIES']
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

@@ -13,9 +13,37 @@ _pages/
 # 一次性探针目录（验证 functions 放置位置用，不是产物也不是源）
 _pages_probe/
 
-# Capacitor 平台目录：CI 由 `capacitor add android` 每次重新生成
-# （本地那份是为了本机出包用，不入库）
-android/
+# Capacitor 平台目录 —— 🔴 现已**入库**（2026-10-03 决策，方案 A）
+#
+# 历史：android/ 原先整体忽略，CI 靠 `rm -rf android && capacitor add android`
+#       每次生成一份**全新的 stock 工程**。后果是本地这份定制过的构建配置
+#       （签名配置 / v3 签名 / R8 排除 WebView JS 桥接 / keystore 路径校验 /
+#         中文路径 overridePathCheck）**CI 完全用不到** ——
+#       CI 产出的包与本地根本不是同一套构建，且 `cap add` 出的工程里
+#       没有 keystore 读取逻辑，签名步骤必然失败。
+#
+# 现在：android/ 入库，CI 改走 `cap copy android`（只同步 web 产物，不重建工程），
+#       保证 **CI 与本地跑的是同一套 build.gradle**。
+#       入库的只是「源」（约 60 个文件），产物仍全部排除（见下方规则）。
+#
+# 🔴 排除清单是本策略的成败关键，少排一条就会让「产物副本」混进 diff：
+#    assets/ 是 `cap copy` 从 www/ 生成的**web 产物副本**（含 index.html / js / icons），
+#    入库 = 同一份前端代码在仓库里存两份 → 改一处、两处不同步，且 diff 里看不出来。
+
+# web 产物副本（cap copy 生成；真正的源是 www/ ← js/ 与 index.html）
+android/app/src/main/assets/
+
+# 本机 SDK 路径（各机器不同，CI 上由 setup-android 或环境变量提供）
+android/local.properties
+
+# 构建产物
+android/build/
+android/app/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/build/
+*.apk
+*.aab
+*.ap_
 
 # 出包产物
 apk-dist/
@@ -24,9 +52,11 @@ dist/
 # 依赖
 node_modules/
 
-# 本地签名配置：含 keystore 口令，绝不入库（CI 自己生成并固化 keystore）
+# 本地签名配置：含 keystore 口令，绝不入库
+# （CI 从 GitHub Secret 恢复密钥，见 .github/workflows/apk.yml 的 Restore 步骤）
 android/keystore.properties
 *.jks
+*.keystore
 
 # 自测：**只排除噪音，测试程序本身必须入库**。
 #   311 条断言是这个项目最值钱的质量资产之一，整个目录 ignore 掉
