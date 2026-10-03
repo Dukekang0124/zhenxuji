@@ -545,8 +545,8 @@ async function makeFiles() {
     gal.titleColor === rgbOf(curApp.hex.ink), [gal.titleColor, curApp.hex.ink]);
   check('副标题精简为「N篇手记」（删冗余 slogan）',
     /^\d+篇手记$/.test(gal.subText), gal.subText);
-  check('卡片底部保留查看/分享两按钮',
-    gal.btnCount === 2 && gal.btnText.join('/') === '查看/分享', gal.btnText);
+  check('卡片底部含 查看/分享/删除 三按钮',
+    gal.btnCount === 3 && gal.btnText.includes('查看') && gal.btnText.includes('分享') && gal.btnText.includes('删除'), gal.btnText);
   check('日期与张数信息在位', /\d{4}年/.test(gal.metaText) && /张/.test(gal.metaText), gal.metaText);
 
   // 排序 + 标签可辨识度（本轮看截图发现的两处问题，必须锁死）

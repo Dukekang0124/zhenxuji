@@ -234,6 +234,28 @@ function archiveIds(ids) {
   return targets.length;
 }
 
+/**
+ * 重新聚类后保留已有分组的身份，避免故事引用的 groupId 悬空。
+ * 按新簇与旧组的照片重叠度匹配：重叠最多的旧组胜出，沿用其 id / title / templateId；
+ * 旧封面若已不在新簇内则回退到新封面。没有任何重叠的新簇用新 id（正常新增）。
+ */
+function preserveGroups(next, old) {
+  if (!old || !old.length) return next;
+  return next.map((g) => {
+    let best = null, bestN = 0;
+    const set = new Set(g.photoIds || []);
+    for (const o of old) {
+      const n = (o.photoIds || []).filter((id) => set.has(id)).length;
+      if (n > bestN) { bestN = n; best = o; }
+    }
+    if (best && bestN > 0) {
+      const coverOk = (g.photoIds || []).includes(best.coverId);
+      return { ...g, id: best.id, title: best.title, templateId: best.templateId, coverId: coverOk ? best.coverId : g.coverId };
+    }
+    return g;
+  });
+}
+
 /* ==================== 扫描 ==================== */
 
 async function runScan(mode) {
@@ -466,8 +488,14 @@ document.addEventListener('click', async (e) => {
 
       case 'regroup': {
         const gs = regroup(st.photos, { maxGapHours: 36, minSize: 1 });
-        store.actions.setGroups(gs);
-        store.toast(`重新聚类：${gs.length} 个分组`);
+        // 🔴 重新聚类必须保留已有分组的身份（id / title / templateId）。
+        //    否则每次都生成全新 id（g_<start>_<i>），而故事里存的是旧 groupId ——
+        //    用户点过「重新聚类」后，再去「再次编辑故事」会因 groupId 悬空而打不开
+        //    （pageCompose 找不到组 → 空状态）。按照片重叠度把新簇匹配回旧组，
+        //    沿用其 id / 标题 / 排版模板（成套方案加载过的模板不能丢）。
+        const preserved = preserveGroups(gs, st.groups);
+        store.actions.setGroups(preserved);
+        store.toast(`重新聚类：${preserved.length} 个分组`);
         render();
         break;
       }

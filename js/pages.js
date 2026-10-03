@@ -623,6 +623,7 @@ function storyCard(s, state, compact = false) {
         <div class="scard__acts">
           <button class="btn btn--sm" data-act="openStory" data-id="${esc(s.id)}">查看</button>
           <button class="btn btn--sm" data-act="shareStory" data-id="${esc(s.id)}">分享</button>
+          <button class="btn btn--sm btn--ghost" data-act="delStory" data-id="${esc(s.id)}">删除</button>
         </div>
       </div>
     </article>`;
