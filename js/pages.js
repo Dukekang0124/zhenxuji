@@ -694,8 +694,11 @@ function recipeCard(r, kind) {
           </table>
           <p class="rcard__hint">${esc(summaryLine(r.params))}</p>
         </div>
-        ${rest.length ? `<span class="rcard__toggle">查看全部参数</span>` : ''}
       `}
+      <!-- 🔴 「查看全部参数」放在折叠区**之外**、操作按钮**之上**：
+           放最后会紧贴操作按钮一排小圆钮，视觉上像按钮的下划线；
+           放在预览图下面又会被误解成"预览图的说明文字"。 -->
+      ${isTpl || !rest.length ? '' : `<span class="rcard__toggle">查看全部参数</span>`}
       <div class="rcard__acts">
         <button class="rbtn" data-act="renameRecipe" data-id="${esc(r.id)}">重命名</button>
         <button class="rbtn" data-act="dupRecipe" data-id="${esc(r.id)}">复制</button>
