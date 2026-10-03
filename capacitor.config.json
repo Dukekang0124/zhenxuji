@@ -1,0 +1,21 @@
+{
+  "appId": "app.zhenxuji.pwa",
+  "appName": "帧叙集",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "loggingBehavior": "none",
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#F7F4F0",
+      "showSpinner": false
+    }
+  }
+}

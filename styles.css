@@ -1,0 +1,1244 @@
+/* 帧叙集 — 品牌视觉系统 v2.0（UI/品牌视觉优化规范）
+   目标人群：18–38 岁女性｜气质：温柔纸感、简约文艺、低饱和高级
+   规范硬约束（禁止随意修改）：
+     主色 #7A6F65 雾棕 ｜ 辅助 #B4D4C8 浅薄荷（仅强调/选中/小标签，禁止大面积）
+     底色 #F7F4F0 米白纸感（纯白 #FFFFFF 禁用为页面背景）
+     警示 #C87B6E 低饱和砖红（仅错误提示）｜ 一级正文 #3A3835 ｜ 次要 #8B8680
+     卡片 #FFFFFF 纯白 ｜ 分割线 #E7E2DD ｜ 隐私条 #F0EBE6
+     圆角：卡片/按钮/弹窗 16px，小控件 12px，禁止直角
+   ❌ 禁止：粗线条、直角、厚重阴影、方块控件、高饱和、渐变网红风、办公后台风 */
+
+:root{
+  /* —— 色彩 —— */
+  --brand:#7A6F65;
+  --mint:#B4D4C8;
+  --alert:#C87B6E;
+  --paper:#F7F4F0;
+  --ink:#3A3835;
+  --ink-2:#8B8680;
+  --line:#E7E2DD;
+  --card:#FFFFFF;
+  --privacy-bg:#F0EBE6;
+
+  /* —— 圆角 —— */
+  --r:16px;
+  --r-sm:12px;
+
+  /* —— 阴影（极淡，纸张轻微浮起） —— */
+  --shadow:0 2px 10px rgba(122,111,101,.06);
+  --shadow-lift:0 4px 16px rgba(122,111,101,.10);
+
+  /* —— 尺寸 —— */
+  --tab-h:60px;
+  --top-h:56px;
+
+  --font:"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+
+/* >>> THEME-PACKS:BEGIN —— 由 scripts/gen-theme.mjs 生成，请勿手改 / 勿删本行 >>> */
+/* 主题包变量层
+   ⚠️ 这些块必须排在 :root 之后：两者特异性同为 (0,1,0)，靠源码顺序取胜。
+      放前面会被 :root 覆盖，主题切了但界面纹丝不动。
+   ⚠️ 每套主题两段：默认 light，[data-mode='dark'] 覆盖。 */
+
+/* 原初·清简 —— 极简高级，最像一本还没写字的册子 */
+[data-theme='origin']{
+  --paper:#F7F5F2;
+  --paper-rgb:247,245,242;
+  --brand:#6B6459;
+  --brand-rgb:107,100,89;
+  --mint:#C9D6CE;
+  --mint-rgb:201,214,206;
+  --alert:#A8554B;
+  --ink:#2F2D2A;
+  --ink-rgb:47,45,42;
+  --ink-2:#6F6A64;
+  --line:#E7E3DF;
+  --card:#FFFFFF;
+  --privacy-bg:#F1EDE8;
+  --muted:#6F6A64;
+  --on-ink:#FFFFFF;
+  --shadow:0 2px 10px rgba(107,100,89,.06);
+  --shadow-lift:0 4px 16px rgba(107,100,89,.10);
+  --r:16px;
+  --r-sm:12px;
+  --r-chip:8px;
+  --font:"Source Han Sans SC","Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:300;
+  --font-w-title:300;
+  --font-ls:0.06em;
+  --icon-stroke:1.15;
+  --nav-kind:solid;
+  --nav-hairline:#E7E3DF;
+  --nav-fg:#6B6459;
+  --nav-fg-2:#6F6A64;
+  --nav-fg-rgb:107,100,89;
+  --nav-chip-a:0.12;
+  --tex-image:none;
+  --tex-size:auto;
+  --tex-blend:normal;
+  --card-border:1px solid;
+  --card-hairline:#E7E3DF;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.34s;
+  --mo-ease:cubic-bezier(.4,0,.2,1);
+  --mo-shift:6px;
+  --nav-bg:rgba(247,245,242,0.94);
+}
+
+[data-theme='origin'][data-mode='dark']{
+  --paper:#1B1A18;
+  --paper-rgb:27,26,24;
+  --brand:#CFC7BB;
+  --brand-rgb:207,199,187;
+  --mint:#7E9A8C;
+  --mint-rgb:126,154,140;
+  --alert:#E0918A;
+  --ink:#F3F0EB;
+  --ink-rgb:243,240,235;
+  --ink-2:#ABA49C;
+  --line:#322F2C;
+  --card:#232120;
+  --privacy-bg:#26231F;
+  --muted:#ABA49C;
+  --on-ink:#1B1A18;
+  --shadow:0 2px 10px rgba(0,0,0,.50);
+  --shadow-lift:0 4px 16px rgba(0,0,0,.60);
+  --r:16px;
+  --r-sm:12px;
+  --r-chip:8px;
+  --font:"Source Han Sans SC","Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:300;
+  --font-w-title:300;
+  --font-ls:0.06em;
+  --icon-stroke:1.15;
+  --nav-kind:solid;
+  --nav-hairline:#322F2C;
+  --nav-fg:#CFC7BB;
+  --nav-fg-2:#ABA49C;
+  --nav-fg-rgb:207,199,187;
+  --nav-chip-a:0.12;
+  --tex-image:none;
+  --tex-size:auto;
+  --tex-blend:normal;
+  --card-border:1px solid;
+  --card-hairline:#322F2C;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.34s;
+  --mo-ease:cubic-bezier(.4,0,.2,1);
+  --mo-shift:6px;
+  --nav-bg:rgba(27,26,24,0.94);
+}
+
+/* 山野信笺 —— 低饱和草木绿配奶油纸，把旅行折进信里 */
+[data-theme='forest']{
+  --paper:#F7F4EA;
+  --paper-rgb:247,244,234;
+  --brand:#4F6B54;
+  --brand-rgb:79,107,84;
+  --mint:#A8BFA0;
+  --mint-rgb:168,191,160;
+  --alert:#9E5738;
+  --ink:#2C362E;
+  --ink-rgb:44,54,46;
+  --ink-2:#5E6D5C;
+  --line:#E3E1D3;
+  --card:#FFFDF8;
+  --privacy-bg:#F0EEE0;
+  --muted:#5E6D5C;
+  --on-ink:#FFFDF8;
+  --shadow:0 2px 10px rgba(79,107,84,.07);
+  --shadow-lift:0 4px 16px rgba(79,107,84,.11);
+  --r:20px;
+  --r-sm:14px;
+  --r-chip:10px;
+  --font:"LXGW WenKai","Kaiti SC","STKaiti","KaiTi","Songti SC",serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.04em;
+  --icon-stroke:1.4;
+  --nav-kind:gradient;
+  --nav-hairline:#A8BFA0;
+  --nav-fg:#2C362E;
+  --nav-fg-2:#2C362E;
+  --nav-fg-rgb:44,54,46;
+  --nav-chip-a:0.18;
+  --tex-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)' opacity='0.22'/%3E%3C/svg%3E");
+  --tex-size:160px 160px;
+  --tex-blend:overlay;
+  --card-border:0;
+  --card-hairline:#E3E1D3;
+  --card-inner:inset 0 1px 0 rgba(255,255,255,.46);
+  --card-deco:linear-gradient(115deg,rgba(79,107,84,.16) 0 10%,rgba(79,107,84,0) 10.6%);
+  --mo-dur:0.5s;
+  --mo-ease:cubic-bezier(.22,.61,.36,1);
+  --mo-shift:12px;
+  --nav-bg:linear-gradient(180deg,#F7F4EA 0%,#A8BFA0 200%);
+}
+
+[data-theme='forest'][data-mode='dark']{
+  --paper:#191D19;
+  --paper-rgb:25,29,25;
+  --brand:#A6C2A8;
+  --brand-rgb:166,194,168;
+  --mint:#6E8A70;
+  --mint-rgb:110,138,112;
+  --alert:#E29A78;
+  --ink:#EEF3EA;
+  --ink-rgb:238,243,234;
+  --ink-2:#9FAA9B;
+  --line:#2C342C;
+  --card:#202620;
+  --privacy-bg:#23291F;
+  --muted:#9FAA9B;
+  --on-ink:#191D19;
+  --shadow:0 2px 10px rgba(0,0,0,.50);
+  --shadow-lift:0 4px 16px rgba(0,0,0,.60);
+  --r:20px;
+  --r-sm:14px;
+  --r-chip:10px;
+  --font:"LXGW WenKai","Kaiti SC","STKaiti","KaiTi","Songti SC",serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.04em;
+  --icon-stroke:1.4;
+  --nav-kind:gradient;
+  --nav-hairline:#6E8A70;
+  --nav-fg:#EEF3EA;
+  --nav-fg-2:#EEF3EA;
+  --nav-fg-rgb:238,243,234;
+  --nav-chip-a:0.18;
+  --tex-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)' opacity='0.22'/%3E%3C/svg%3E");
+  --tex-size:160px 160px;
+  --tex-blend:overlay;
+  --card-border:0;
+  --card-hairline:#2C342C;
+  --card-inner:inset 0 1px 0 rgba(255,255,255,.46);
+  --card-deco:linear-gradient(115deg,rgba(166,194,168,.16) 0 10%,rgba(166,194,168,0) 10.6%);
+  --mo-dur:0.5s;
+  --mo-ease:cubic-bezier(.22,.61,.36,1);
+  --mo-shift:12px;
+  --nav-bg:linear-gradient(180deg,#191D19 0%,#6E8A70 200%);
+}
+
+/* 胶片叙忆 —— 暖棕胶片配金线，旧照片终于有了该有的样子 */
+[data-theme='film']{
+  --paper:#F2E9DC;
+  --paper-rgb:242,233,220;
+  --brand:#7A5024;
+  --brand-rgb:122,80,36;
+  --mint:#C9A063;
+  --mint-rgb:201,160,99;
+  --alert:#A6442F;
+  --ink:#342414;
+  --ink-rgb:52,36,20;
+  --ink-2:#6E5638;
+  --line:#DFD0B9;
+  --card:#FCF5EA;
+  --privacy-bg:#EBDFCB;
+  --muted:#6E5638;
+  --on-ink:#FCF5EA;
+  --shadow:0 2px 10px rgba(122,80,36,.08);
+  --shadow-lift:0 4px 16px rgba(122,80,36,.13);
+  --r:22px;
+  --r-sm:16px;
+  --r-chip:12px;
+  --font:"Source Han Serif SC","Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.05em;
+  --icon-stroke:1.9;
+  --nav-kind:blur;
+  --nav-hairline:#C9A063;
+  --nav-fg:#F6EFE4;
+  --nav-fg-2:#C6BBAA;
+  --nav-fg-rgb:246,239,228;
+  --nav-chip-a:0.18;
+  --tex-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)' opacity='0.6'/%3E%3C/svg%3E");
+  --tex-size:110px 110px;
+  --tex-blend:overlay;
+  --card-border:2px solid;
+  --card-hairline:#6E5638;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.18s;
+  --mo-ease:cubic-bezier(.2,0,0,1);
+  --mo-shift:3px;
+  --nav-bg:rgba(14,11,8,0.72);
+  --nav-blur:14px;
+}
+
+[data-theme='film'][data-mode='dark']{
+  --paper:#17120E;
+  --paper-rgb:23,18,14;
+  --brand:#D9B476;
+  --brand-rgb:217,180,118;
+  --mint:#8C6239;
+  --mint-rgb:140,98,57;
+  --alert:#E88B6F;
+  --ink:#F5E9D6;
+  --ink-rgb:245,233,214;
+  --ink-2:#B79A76;
+  --line:#322619;
+  --card:#201913;
+  --privacy-bg:#251C14;
+  --muted:#B79A76;
+  --on-ink:#17120E;
+  --shadow:0 2px 10px rgba(0,0,0,.55);
+  --shadow-lift:0 4px 16px rgba(0,0,0,.65);
+  --r:22px;
+  --r-sm:16px;
+  --r-chip:12px;
+  --font:"Source Han Serif SC","Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.05em;
+  --icon-stroke:1.9;
+  --nav-kind:blur;
+  --nav-hairline:#8C6239;
+  --nav-fg:#F6EFE4;
+  --nav-fg-2:#C6BBAA;
+  --nav-fg-rgb:246,239,228;
+  --nav-chip-a:0.18;
+  --tex-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)' opacity='0.6'/%3E%3C/svg%3E");
+  --tex-size:110px 110px;
+  --tex-blend:overlay;
+  --card-border:2px solid;
+  --card-hairline:#B79A76;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.18s;
+  --mo-ease:cubic-bezier(.2,0,0,1);
+  --mo-shift:3px;
+  --nav-bg:rgba(14,11,8,0.72);
+  --nav-blur:14px;
+}
+
+/* 甜屿碎光 —— 淡粉奶杏配超大圆角，甜品和闺蜜合照就该这么甜 */
+[data-theme='sweet']{
+  --paper:#FDF4F1;
+  --paper-rgb:253,244,241;
+  --brand:#AB4E66;
+  --brand-rgb:171,78,102;
+  --mint:#F2C6B4;
+  --mint-rgb:242,198,180;
+  --alert:#B54A36;
+  --ink:#3A2830;
+  --ink-rgb:58,40,48;
+  --ink-2:#7D6570;
+  --line:#F1DFDB;
+  --card:#FFFFFF;
+  --privacy-bg:#FBEAE6;
+  --muted:#7D6570;
+  --on-ink:#FFFFFF;
+  --shadow:0 2px 10px rgba(171,78,102,.06);
+  --shadow-lift:0 4px 16px rgba(171,78,102,.11);
+  --r:26px;
+  --r-sm:18px;
+  --r-chip:14px;
+  --font:"Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.04em;
+  --icon-stroke:1.5;
+  --nav-kind:gradient;
+  --nav-hairline:#F2C6B4;
+  --nav-fg:#3A2830;
+  --nav-fg-2:#3A2830;
+  --nav-fg-rgb:58,40,48;
+  --nav-chip-a:0.18;
+  --tex-image:radial-gradient(120% 80% at 50% -10%,rgba(242,198,180,.09) 0%,rgba(242,198,180,0) 68%);
+  --tex-size:auto;
+  --tex-blend:normal;
+  --card-border:0;
+  --card-hairline:#F1DFDB;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.28s;
+  --mo-ease:cubic-bezier(.34,1.56,.64,1);
+  --mo-shift:8px;
+  --nav-bg:linear-gradient(180deg,#FDF4F1 0%,#F2C6B4 200%);
+}
+
+[data-theme='sweet'][data-mode='dark']{
+  --paper:#201719;
+  --paper-rgb:32,23,25;
+  --brand:#EBA7BB;
+  --brand-rgb:235,167,187;
+  --mint:#C99A8A;
+  --mint-rgb:201,154,138;
+  --alert:#F0937A;
+  --ink:#FCEEF1;
+  --ink-rgb:252,238,241;
+  --ink-2:#B99AA5;
+  --line:#382A2F;
+  --card:#2A1F22;
+  --privacy-bg:#2E2225;
+  --muted:#B99AA5;
+  --on-ink:#201719;
+  --shadow:0 2px 10px rgba(0,0,0,.50);
+  --shadow-lift:0 4px 16px rgba(0,0,0,.60);
+  --r:26px;
+  --r-sm:18px;
+  --r-chip:14px;
+  --font:"Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.04em;
+  --icon-stroke:1.5;
+  --nav-kind:gradient;
+  --nav-hairline:#C99A8A;
+  --nav-fg:#FCEEF1;
+  --nav-fg-2:#FCEEF1;
+  --nav-fg-rgb:252,238,241;
+  --nav-chip-a:0.18;
+  --tex-image:radial-gradient(120% 80% at 50% -10%,rgba(201,154,138,.09) 0%,rgba(201,154,138,0) 68%);
+  --tex-size:auto;
+  --tex-blend:normal;
+  --card-border:0;
+  --card-hairline:#382A2F;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.28s;
+  --mo-ease:cubic-bezier(.34,1.56,.64,1);
+  --mo-shift:8px;
+  --nav-bg:linear-gradient(180deg,#201719 0%,#C99A8A 200%);
+}
+
+/* 纸感原生 —— 米白纸底 + 雾棕线条，最像一本没写字的册子 */
+[data-theme='paper']{
+  --paper:#F7F4F0;
+  --paper-rgb:247,244,240;
+  --brand:#746961;
+  --brand-rgb:116,105,97;
+  --mint:#B4D4C8;
+  --mint-rgb:180,212,200;
+  --alert:#A3544B;
+  --ink:#3A3835;
+  --ink-rgb:58,56,53;
+  --ink-2:#6F6A66;
+  --line:#E6E1DD;
+  --card:#FFFFFF;
+  --privacy-bg:undefined;
+  --muted:#706A63;
+  --on-ink:#FBF9F7;
+  --shadow:0 2px 10px rgba(116,105,97,.06);
+  --shadow-lift:0 4px 16px rgba(116,105,97,.10);
+  --r:16px;
+  --r-sm:12px;
+  --r-chip:8px;
+  --font:"Source Han Sans SC","Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:300;
+  --font-w-title:300;
+  --font-ls:0.06em;
+  --icon-stroke:1.15;
+  --nav-kind:solid;
+  --nav-hairline:#E6E1DD;
+  --nav-fg:#746961;
+  --nav-fg-2:#6F6A66;
+  --nav-fg-rgb:116,105,97;
+  --nav-chip-a:0.12;
+  --tex-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)' opacity='0.22'/%3E%3C/svg%3E");
+  --tex-size:160px 160px;
+  --tex-blend:overlay;
+  --card-border:0;
+  --card-hairline:#E6E1DD;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.34s;
+  --mo-ease:cubic-bezier(.4,0,.2,1);
+  --mo-shift:6px;
+  --nav-bg:rgba(247,244,240,0.94);
+}
+
+[data-theme='paper'][data-mode='dark']{
+  --paper:#1C1A18;
+  --paper-rgb:28,26,24;
+  --brand:#C9C0B6;
+  --brand-rgb:201,192,182;
+  --mint:#7E9A8C;
+  --mint-rgb:126,154,140;
+  --alert:#DE9086;
+  --ink:#F2EEE9;
+  --ink-rgb:242,238,233;
+  --ink-2:#A79F97;
+  --line:#33302D;
+  --card:#242220;
+  --privacy-bg:#272422;
+  --muted:#A79F97;
+  --on-ink:#1C1A18;
+  --shadow:0 2px 10px rgba(0,0,0,.50);
+  --shadow-lift:0 4px 16px rgba(0,0,0,.60);
+  --r:16px;
+  --r-sm:12px;
+  --r-chip:8px;
+  --font:"Source Han Sans SC","Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:300;
+  --font-w-title:300;
+  --font-ls:0.06em;
+  --icon-stroke:1.15;
+  --nav-kind:solid;
+  --nav-hairline:#33302D;
+  --nav-fg:#C9C0B6;
+  --nav-fg-2:#A79F97;
+  --nav-fg-rgb:201,192,182;
+  --nav-chip-a:0.12;
+  --tex-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)' opacity='0.22'/%3E%3C/svg%3E");
+  --tex-size:160px 160px;
+  --tex-blend:overlay;
+  --card-border:0;
+  --card-hairline:#33302D;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.34s;
+  --mo-ease:cubic-bezier(.4,0,.2,1);
+  --mo-shift:6px;
+  --nav-bg:rgba(28,26,24,0.94);
+}
+
+/* 奶油奶茶 —— 暖调奶油底，像一杯加了奶的下午茶 */
+[data-theme='cream']{
+  --paper:#FAF5EF;
+  --paper-rgb:250,245,239;
+  --brand:#826752;
+  --brand-rgb:130,103,82;
+  --mint:#D4B5A0;
+  --mint-rgb:212,181,160;
+  --alert:#A3564C;
+  --ink:#4A3B33;
+  --ink-rgb:74,59,51;
+  --ink-2:#7C685C;
+  --line:#EDE1D6;
+  --card:#FFFCF8;
+  --privacy-bg:undefined;
+  --muted:#7A695B;
+  --on-ink:#FDFAF6;
+  --shadow:0 2px 10px rgba(130,103,82,.07);
+  --shadow-lift:0 4px 16px rgba(130,103,82,.11);
+  --r:20px;
+  --r-sm:14px;
+  --r-chip:10px;
+  --font:"Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.04em;
+  --icon-stroke:1.4;
+  --nav-kind:gradient;
+  --nav-hairline:#D4B5A0;
+  --nav-fg:#4A3B33;
+  --nav-fg-2:#4A3B33;
+  --nav-fg-rgb:74,59,51;
+  --nav-chip-a:0.18;
+  --tex-image:radial-gradient(120% 80% at 50% -10%,rgba(212,181,160,.09) 0%,rgba(212,181,160,0) 68%);
+  --tex-size:auto;
+  --tex-blend:normal;
+  --card-border:0;
+  --card-hairline:#EDE1D6;
+  --card-inner:inset 0 1px 0 rgba(255,255,255,.46);
+  --card-deco:linear-gradient(115deg,rgba(130,103,82,.16) 0 10%,rgba(130,103,82,0) 10.6%);
+  --mo-dur:0.5s;
+  --mo-ease:cubic-bezier(.22,.61,.36,1);
+  --mo-shift:12px;
+  --nav-bg:linear-gradient(180deg,#FAF5EF 0%,#D4B5A0 200%);
+}
+
+[data-theme='cream'][data-mode='dark']{
+  --paper:#1E1815;
+  --paper-rgb:30,24,21;
+  --brand:#D9BFA6;
+  --brand-rgb:217,191,166;
+  --mint:#A8846B;
+  --mint-rgb:168,132,107;
+  --alert:#E09C7E;
+  --ink:#F6EDE3;
+  --ink-rgb:246,237,227;
+  --ink-2:#B29C8A;
+  --line:#34291F;
+  --card:#262019;
+  --privacy-bg:#2A231C;
+  --muted:#B29C8A;
+  --on-ink:#1E1815;
+  --shadow:0 2px 10px rgba(0,0,0,.50);
+  --shadow-lift:0 4px 16px rgba(0,0,0,.60);
+  --r:20px;
+  --r-sm:14px;
+  --r-chip:10px;
+  --font:"Yuanti SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.04em;
+  --icon-stroke:1.4;
+  --nav-kind:gradient;
+  --nav-hairline:#A8846B;
+  --nav-fg:#F6EDE3;
+  --nav-fg-2:#F6EDE3;
+  --nav-fg-rgb:246,237,227;
+  --nav-chip-a:0.18;
+  --tex-image:radial-gradient(120% 80% at 50% -10%,rgba(168,132,107,.09) 0%,rgba(168,132,107,0) 68%);
+  --tex-size:auto;
+  --tex-blend:normal;
+  --card-border:0;
+  --card-hairline:#34291F;
+  --card-inner:inset 0 1px 0 rgba(255,255,255,.46);
+  --card-deco:linear-gradient(115deg,rgba(217,191,166,.16) 0 10%,rgba(217,191,166,0) 10.6%);
+  --mo-dur:0.5s;
+  --mo-ease:cubic-bezier(.22,.61,.36,1);
+  --mo-shift:12px;
+  --nav-bg:linear-gradient(180deg,#1E1815 0%,#A8846B 200%);
+}
+
+/* 杂志冷调 —— 偏冷的灰白底，接近纸质感杂志的内页 */
+[data-theme='magazine']{
+  --paper:#F2F3F1;
+  --paper-rgb:242,243,241;
+  --brand:#5D645F;
+  --brand-rgb:93,100,95;
+  --mint:#A9B5AE;
+  --mint-rgb:169,181,174;
+  --alert:#A7554C;
+  --ink:#2F3431;
+  --ink-rgb:47,52,49;
+  --ink-2:#686E6A;
+  --line:#DFE2DF;
+  --card:#FFFFFF;
+  --privacy-bg:undefined;
+  --muted:#686E6A;
+  --on-ink:#FFFFFF;
+  --shadow:0 2px 10px rgba(93,100,95,.07);
+  --shadow-lift:0 4px 16px rgba(93,100,95,.11);
+  --r:16px;
+  --r-sm:12px;
+  --r-chip:8px;
+  --font:"Source Han Sans SC","Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:300;
+  --font-w-title:300;
+  --font-ls:0.06em;
+  --icon-stroke:1.15;
+  --nav-kind:solid;
+  --nav-hairline:#DFE2DF;
+  --nav-fg:#5D645F;
+  --nav-fg-2:#686E6A;
+  --nav-fg-rgb:93,100,95;
+  --nav-chip-a:0.12;
+  --tex-image:none;
+  --tex-size:auto;
+  --tex-blend:normal;
+  --card-border:2px solid;
+  --card-hairline:#686E6A;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.18s;
+  --mo-ease:cubic-bezier(.2,0,0,1);
+  --mo-shift:3px;
+  --nav-bg:rgba(242,243,241,0.94);
+}
+
+[data-theme='magazine'][data-mode='dark']{
+  --paper:#16181A;
+  --paper-rgb:22,24,26;
+  --brand:#C3CBC6;
+  --brand-rgb:195,203,198;
+  --mint:#7C8A83;
+  --mint-rgb:124,138,131;
+  --alert:#E09A92;
+  --ink:#EDF0EE;
+  --ink-rgb:237,240,238;
+  --ink-2:#9BA5A0;
+  --line:#2B3033;
+  --card:#1E2123;
+  --privacy-bg:#212527;
+  --muted:#9BA5A0;
+  --on-ink:#16181A;
+  --shadow:0 2px 10px rgba(0,0,0,.50);
+  --shadow-lift:0 4px 16px rgba(0,0,0,.60);
+  --r:16px;
+  --r-sm:12px;
+  --r-chip:8px;
+  --font:"Source Han Sans SC","Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-w-body:300;
+  --font-w-title:300;
+  --font-ls:0.06em;
+  --icon-stroke:1.15;
+  --nav-kind:solid;
+  --nav-hairline:#2B3033;
+  --nav-fg:#C3CBC6;
+  --nav-fg-2:#9BA5A0;
+  --nav-fg-rgb:195,203,198;
+  --nav-chip-a:0.12;
+  --tex-image:none;
+  --tex-size:auto;
+  --tex-blend:normal;
+  --card-border:2px solid;
+  --card-hairline:#9BA5A0;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.18s;
+  --mo-ease:cubic-bezier(.2,0,0,1);
+  --mo-shift:3px;
+  --nav-bg:rgba(22,24,26,0.94);
+}
+
+/* 轻复古手账 —— 偏黄的旧纸底 + 深棕线，像用了半年的手账 */
+[data-theme='retro']{
+  --paper:#F5EFE6;
+  --paper-rgb:245,239,230;
+  --brand:#7D604B;
+  --brand-rgb:125,96,75;
+  --mint:#B59778;
+  --mint-rgb:181,151,120;
+  --alert:#9B5147;
+  --ink:#3E3026;
+  --ink-rgb:62,48,38;
+  --ink-2:#756355;
+  --line:#E7DBCD;
+  --card:#FBF7F0;
+  --privacy-bg:undefined;
+  --muted:#776251;
+  --on-ink:#FBF6EF;
+  --shadow:0 2px 10px rgba(125,96,75,.08);
+  --shadow-lift:0 4px 16px rgba(125,96,75,.12);
+  --r:22px;
+  --r-sm:16px;
+  --r-chip:12px;
+  --font:"LXGW WenKai","Kaiti SC","STKaiti","KaiTi","Songti SC",serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.04em;
+  --icon-stroke:1.9;
+  --nav-kind:blur;
+  --nav-hairline:#B59778;
+  --nav-fg:#F6EFE4;
+  --nav-fg-2:#C6BBAA;
+  --nav-fg-rgb:246,239,228;
+  --nav-chip-a:0.18;
+  --tex-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)' opacity='0.6'/%3E%3C/svg%3E");
+  --tex-size:110px 110px;
+  --tex-blend:overlay;
+  --card-border:1px solid;
+  --card-hairline:#E7DBCD;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.28s;
+  --mo-ease:cubic-bezier(.34,1.56,.64,1);
+  --mo-shift:8px;
+  --nav-bg:rgba(14,11,8,0.72);
+  --nav-blur:14px;
+}
+
+[data-theme='retro'][data-mode='dark']{
+  --paper:#191310;
+  --paper-rgb:25,19,16;
+  --brand:#D9B194;
+  --brand-rgb:217,177,148;
+  --mint:#9C7B54;
+  --mint-rgb:156,123,84;
+  --alert:#E4917A;
+  --ink:#F5E9DC;
+  --ink-rgb:245,233,220;
+  --ink-2:#B79C82;
+  --line:#322619;
+  --card:#211A15;
+  --privacy-bg:#251D17;
+  --muted:#B79C82;
+  --on-ink:#191310;
+  --shadow:0 2px 10px rgba(0,0,0,.50);
+  --shadow-lift:0 4px 16px rgba(0,0,0,.60);
+  --r:22px;
+  --r-sm:16px;
+  --r-chip:12px;
+  --font:"LXGW WenKai","Kaiti SC","STKaiti","KaiTi","Songti SC",serif;
+  --font-w-body:400;
+  --font-w-title:500;
+  --font-ls:0.04em;
+  --icon-stroke:1.9;
+  --nav-kind:blur;
+  --nav-hairline:#9C7B54;
+  --nav-fg:#F6EFE4;
+  --nav-fg-2:#C6BBAA;
+  --nav-fg-rgb:246,239,228;
+  --nav-chip-a:0.18;
+  --tex-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23g)' opacity='0.6'/%3E%3C/svg%3E");
+  --tex-size:110px 110px;
+  --tex-blend:overlay;
+  --card-border:1px solid;
+  --card-hairline:#322619;
+  --card-inner:0 0 0 rgba(0,0,0,0);
+  --card-deco:none;
+  --mo-dur:0.28s;
+  --mo-ease:cubic-bezier(.34,1.56,.64,1);
+  --mo-shift:8px;
+  --nav-bg:rgba(14,11,8,0.72);
+  --nav-blur:14px;
+}
+/* <<< THEME-PACKS:END —— 请勿删本行（生成器靠它定位替换区） <<< */
+
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  /* 纸肌理（P0-3）：主题的纹理作为**第二背景层**压在纸色之上，
+     用 background-blend-mode 与底色混合。
+     为什么不做成一个 position:fixed 的浮层：那需要动 z-index/层叠上下文，
+     一旦压错层就会盖住内容或挡住点击；做背景层零副作用、也不吃交互。
+     代价是纹理随画布固定、不随内容滚动 —— 恰好就是"纸"该有的观感。
+     浓度已烘进图案本身（见 gen-theme.mjs 的 textureImage）。*/
+  background-color:var(--paper);
+  background-image:var(--tex-image,none);
+  background-size:var(--tex-size,auto);
+  background-blend-mode:var(--tex-blend,normal);
+  color:var(--ink);
+  font-family:var(--font);
+  /* 字重与字距由主题包决定：清简走纤细、信笺走手写、胶片走宋体 —— 见 theme/packs.json 的 fontSets */
+  font-weight:var(--font-w-body,300);
+  font-size:15px;
+  line-height:1.6;                 /* 阅读松弛感 */
+  letter-spacing:var(--font-ls,.03em);
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom));
+  /* 换主题时底色/文字平滑过渡，不闪一下白（只过渡这两个属性，避免整页重排） */
+  transition:background-color .3s ease,color .3s ease;
+}
+button{font-family:inherit;font-weight:300;cursor:pointer;border:0;background:none;color:inherit}
+img{display:block;max-width:100%}
+
+/* ================= 顶栏 =================
+   布局：左 Logo+标题 ｜ 右 完整 Slogan ｜ 最右 帮助
+   窄屏（≤560px）Slogan 整条换到第二行 —— 宁可顶栏高一档，也绝不出现省略号。
+   （实测 375px：固定占位约 198px，20 字 Slogan 需 ~231px，同一行必然截断）*/
+.topbar{
+  position:sticky;top:0;z-index:20;
+  min-height:var(--top-h);
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;
+  padding:10px 20px;background:rgba(var(--paper-rgb),.94);
+  backdrop-filter:saturate(1.1) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:8px;flex:none}
+.brand__mark{color:var(--brand);display:flex;align-items:center}
+.brand__mark img{width:24px;height:24px;display:block}
+/* 页头 Logo 的线宽也跟着主题包走（图形母题四套共用，只变线与色） */
+.brand__mark svg{stroke-width:var(--icon-stroke,1.15)}
+.brand__name{
+  font-size:16px;font-weight:400;color:var(--brand);
+  letter-spacing:.22em;            /* 字间距放宽 */
+}
+.brand__slogan{
+  font-size:11px;color:var(--ink-2);letter-spacing:.05em;
+  flex:1 1 auto;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.help{
+  flex:none;margin-left:auto;font-size:12px;color:var(--ink-2);letter-spacing:.08em;
+  padding:4px 8px;border-radius:var(--r-sm);transition:color .18s,background .18s,transform .12s;
+}
+.help:active{color:var(--brand);background:rgba(var(--mint-rgb),.18);transform:scale(.94)}
+
+/* 窄屏：Slogan 独占第二行，完整可读、无省略号 */
+@media (max-width:560px){
+  .brand__slogan{
+    flex:0 0 100%;order:3;
+    white-space:normal;overflow:visible;text-overflow:clip;line-height:1.5;
+  }
+}
+
+/* ================= 视图区 ================= */
+.view{
+  max-width:680px;margin:0 auto;padding:32px 20px 40px;min-height:64vh;
+  /* 页面进场动效跟随主题（P0-3）：--mo-dur / --mo-ease / --mo-shift 三件套。
+     · 为什么挂 .view 而不是内容里的卡片：#view 是**常驻元素**，render 只换它的
+       innerHTML、元素自己不重建 → 动画只在冷启动跑一次。挂到 .card / .entry 这种
+       每次 render 都新建的节点上，「检查更新」「改主题」这类只动一小块状态的刷新
+       会把整页重新动一遍，用户看到的是整屏闪一下。
+     · 为什么用 animation 而不是 transition：进场是"从无到有"，没有起始状态可过渡。
+     · ⚠️ 动画期间 .view 上有非 none 的 transform → 会替 position:fixed 的后代造出
+       包含块。更新弹窗原本就拼在 view 的 innerHTML 里，会被锚到 .view 上；本轮已把
+       弹窗挪到 body 级 #modalRoot，这个坑从根上填掉（详见 index.html 注释）。
+     · 无障碍：prefers-reduced-motion 归零见文件末尾，那边用 * + !important 全局兜底。 */
+  animation:viewIn var(--mo-dur,.34s) var(--mo-ease,cubic-bezier(.4,0,.2,1)) both;
+}
+@keyframes viewIn{
+  from{opacity:0;transform:translateY(var(--mo-shift,6px))}
+  to{opacity:1;transform:none}
+}
+.page-title{
+  font-size:26px;font-weight:var(--font-w-title,300);color:var(--brand);
+  /* 字距 = 主题基础字距 + 标题额外留白：sans-thin 得 .06+.08=.14em，与 V1.5 逐像素一致；
+     handwrite / serif-soft / rounded-soft 则自动收紧，跟随主题的字体气质 */
+  letter-spacing:calc(var(--font-ls,.06em) + .08em);margin:0 0 8px;line-height:1.4;
+}
+.page-sub{font-size:13px;color:var(--ink-2);letter-spacing:.06em;margin:0 0 28px;line-height:1.7}
+/* 分组副标题：紧跟在 h2 下面，不需要 28px 的大间距 */
+.page-sub--tight{margin:-10px 0 14px;font-size:12.5px}
+
+/* ================= 明暗三选（分段控件） =================
+   方案把「明暗」定义为每套主题内部的子选项，所以它必须比主题卡更轻 ——
+   用低对比的底 + 选中项浮起，视觉权重明显低于主题卡，避免喧宾夺主。 */
+.seg{display:flex;gap:4px;background:var(--privacy-bg);border-radius:var(--r-sm);padding:4px;margin:0 0 26px}
+.seg__i{
+  flex:1;border:0;background:none;cursor:pointer;
+  font-family:inherit;font-weight:inherit;letter-spacing:.06em;
+  font-size:13px;color:var(--ink-2);padding:10px 0;
+  border-radius:calc(var(--r-sm) - 3px);
+  transition:background .2s,color .2s,box-shadow .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.seg__i--on{background:var(--card);color:var(--brand);box-shadow:var(--shadow)}
+.seg__i:active{transform:scale(.98)}
+.muted{color:var(--ink-2);font-size:13px}
+.empty{
+  text-align:center;color:var(--ink-2);font-size:13px;
+  padding:48px 12px;letter-spacing:.06em;
+}
+
+/* ================= 卡片 ================= */
+.card{
+  background:var(--card);border-radius:var(--r);
+  padding:20px;margin-bottom:16px;
+  /* 卡片形态跟随主题（P0-3）：
+     · --card-border / --card-hairline 描边（细描边纸卡 vs 粗描边画框 vs 无边框浮起）
+     · --card-inner 顶部内高光（胶带角贴那套才有；无操作时是"全透明零阴影"）
+     · --card-deco 用 background-image 画装饰（左上角胶带），不占伪元素、不改定位
+     🔴 两条阴影之间**必须有逗号**。写成 `var(--shadow) var(--card-inner)` 等于一个阴影
+        后面挂了多余的值 → 整条声明被判非法 → 计算值直接变 none，**所有卡片的阴影全丢**。
+        这个坑是自测里那条「卡片阴影极淡」抓出来的：界面看着"还行"（白卡压白纸，
+        少一层 .06 透明度的阴影肉眼几乎看不出），但确实丢了一层视觉层次。
+     另一个方向的坑同样要避开：不能写 `var(--card-inner, none)` —— `box-shadow:a, none`
+        也是非法值。所以「无操作」在配置里必须写成 `0 0 0 rgba(0,0,0,0)`，不是 none。 */
+  border:var(--card-border,0) var(--card-hairline,transparent);
+  background-image:var(--card-deco,none);
+  box-shadow:var(--shadow),var(--card-inner);
+}
+.card--tight{padding:14px}
+.row{display:flex;align-items:center;gap:12px}
+.row--between{justify-content:space-between}
+.spacer{flex:1}
+/* 卡片内部标题/描述必须竖排：两个 span 默认 inline 会挤成一行（截图实测踩坑）
+   🔴 .theme 是后补的：主题卡当年漏在这条规则外，标题与描述挤同一行（本轮修复） */
+.entry .spacer,.card .spacer,.mini .spacer,.theme .spacer{display:flex;flex-direction:column;min-width:0}
+
+/* ================= 入口大卡片（首页主体，整卡可点） ================= */
+.entry{
+  display:flex;align-items:center;gap:16px;width:100%;text-align:left;
+  background:var(--card);border-radius:var(--r);
+  padding:24px;margin-bottom:24px;
+  box-shadow:var(--shadow);
+  transition:box-shadow .2s,transform .16s,background .2s;
+}
+.entry:active{
+  box-shadow:var(--shadow-lift);
+  transform:translateY(-1px);
+  background:var(--privacy-bg);   /* 按压态：比卡片略深/略浅，随主题走（原先写死 #FDFCFA，非纸感主题下按压几乎看不见） */
+}
+.entry__i{
+  width:46px;height:46px;flex:none;border-radius:var(--r-sm);
+  background:rgba(var(--mint-rgb),.16);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--brand);
+}
+.entry__t{font-size:16px;font-weight:400;color:var(--ink);letter-spacing:.08em}
+.entry__d{font-size:12px;color:var(--ink-2);margin-top:4px;letter-spacing:.04em;line-height:1.6}
+.entry__arrow{flex:none;color:var(--brand);opacity:.5;display:flex}
+
+/* ================= 按钮 ================= */
+/* 主操作：白底 + 雾棕细边框 + 雾棕文字；点击填极淡薄荷 */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border-radius:var(--r-sm);padding:11px 18px;
+  font-size:14px;font-weight:400;letter-spacing:.08em;
+  background:var(--card);color:var(--brand);
+  border:1px solid rgba(var(--brand-rgb),.32);
+  transition:background .2s,border-color .2s,transform .12s;
+}
+.btn:active{background:rgba(var(--mint-rgb),.22);border-color:var(--mint);transform:scale(.99)}
+.btn--text{background:none;border:0;color:var(--brand);padding:8px 10px}
+.btn--text:active{color:rgba(var(--brand-rgb),.7)}
+.btn--fill{background:var(--brand);color:#FBF9F7;border-color:transparent}
+.btn--fill:active{background:rgba(var(--brand-rgb),.88)}
+.btn--sm{padding:8px 14px;font-size:13px;border-radius:var(--r-sm)}
+.btn--block{display:flex;width:100%}
+.btn[disabled]{opacity:.4;pointer-events:none}
+
+/* ================= 隐私提示条 ================= */
+.privacy{
+  display:flex;align-items:flex-start;gap:10px;
+  background:var(--privacy-bg);border-radius:var(--r-sm);
+  padding:12px 14px;margin-top:4px;
+}
+.privacy__i{flex:none;color:var(--brand);opacity:.62;display:flex;margin-top:2px}
+.privacy__t{font-size:12px;color:var(--ink-2);line-height:1.65;letter-spacing:.03em}
+
+.note{
+  font-size:12px;color:var(--ink-2);background:rgba(var(--mint-rgb),.14);
+  border-radius:var(--r-sm);padding:11px 14px;letter-spacing:.03em;margin:14px 0;line-height:1.65;
+}
+.note--alert{background:rgba(200,123,110,.12);color:var(--alert)}
+
+/* ================= 照片网格 ================= */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid--2{grid-template-columns:repeat(2,1fr)}
+.ph{
+  position:relative;border-radius:var(--r-sm);overflow:hidden;
+  background:var(--privacy-bg);aspect-ratio:1;
+}
+.ph img{width:100%;height:100%;object-fit:cover}
+.ph__tag{
+  position:absolute;left:6px;top:6px;font-size:10px;letter-spacing:.04em;
+  background:rgba(58,56,53,.62);color:#FBF9F7;border-radius:6px;padding:2px 7px;
+}
+/* 规范六.1：废片标签改柔和浅底色，不用大红强警示 */
+.ph__tag--soft{background:rgba(255,255,255,.86);color:var(--ink-2)}
+.ph--a{outline:1.5px solid rgba(200,123,110,.42);outline-offset:-1.5px}
+.ph--b{outline:1.5px solid var(--mint);outline-offset:-1.5px}
+.ph--a::after{content:'';position:absolute;inset:0;background:rgba(200,123,110,.06)}
+.ph__score{
+  position:absolute;right:6px;bottom:6px;font-size:10px;
+  background:rgba(255,255,255,.86);color:var(--ink-2);border-radius:6px;padding:1px 6px;
+}
+.reasons{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chip{
+  font-size:11px;color:var(--alert);background:rgba(200,123,110,.10);
+  /* 🔴 圆角必须跟随主题的 radiusScale.chip（8/10/12/14）。
+     原来这里硬编码 8px —— 而生成器每套主题都在吐 --r-chip，**没有任何元素消费它**，
+     结果就是"换了主题 chip 圆角纹丝不动"，配置里的 chip 刻度纯属摆设。
+     这是「CSS 变量覆盖度」闸门抓出来的典型病症：配置声明了 token、消费方写死数值。
+     消费者是 js/pages.js 的扫描结果标签（相似/连拍等原因 chip）。 */
+  border-radius:var(--r-chip,8px);padding:3px 9px;letter-spacing:.03em;
+}
+.chip--b{color:var(--brand);background:rgba(var(--mint-rgb),.22)}
+.chip--n{color:var(--ink-2);background:var(--privacy-bg)}
+
+/* ================= 扫描进度 ================= */
+.progress{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:12px 0}
+.progress__bar{height:100%;background:var(--brand);width:0;transition:width .3s;border-radius:99px}
+
+/* ================= 分组卡片 ================= */
+.group{display:flex;gap:14px;align-items:center}
+.group__cover{width:76px;height:76px;flex:none;border-radius:var(--r-sm);overflow:hidden;background:var(--privacy-bg)}
+.group__cover img{width:100%;height:100%;object-fit:cover}
+.group__t{font-size:15px;font-weight:400;letter-spacing:.06em;color:var(--ink)}
+.group__m{font-size:12px;color:var(--ink-2);margin-top:3px;letter-spacing:.03em}
+
+/* ============ 事件分组卡（规范六.2：照片封面 + 半透雾棕叠加文字） ============ */
+.gcard{
+  background:var(--card);border-radius:var(--r);overflow:hidden;
+  box-shadow:var(--shadow);margin-bottom:18px;
+}
+.gcard__cover{position:relative;width:100%;aspect-ratio:16/9;background:var(--privacy-bg);overflow:hidden}
+.gcard__cover img{width:100%;height:100%;object-fit:cover}
+/* 遮罩只压暗照片下缘，保证叠字可读；不做整片染色，避免"厚重色块"观感 */
+.gcard__veil{
+  position:absolute;inset:0;
+  background:linear-gradient(to bottom,rgba(58,56,53,0) 42%,rgba(58,56,53,.52) 100%);
+}
+.gcard__txt{
+  position:absolute;left:16px;right:16px;bottom:14px;
+  display:flex;flex-direction:column;gap:3px;
+}
+.gcard__t{font-size:16px;font-weight:400;color:#FBF9F7;letter-spacing:.08em;
+  text-shadow:0 1px 6px rgba(58,56,53,.28)}
+.gcard__m{font-size:12px;color:rgba(251,249,247,.9);letter-spacing:.04em}
+/* 无封面时：米白底 + 雾棕字，不留一块死灰 */
+.gcard--nophoto .gcard__cover{aspect-ratio:auto;padding:20px 16px;background:var(--privacy-bg)}
+.gcard__txt--plain .gcard__t{color:var(--brand);text-shadow:none}
+.gcard__txt--plain .gcard__m{color:var(--ink-2)}
+.gcard__acts{display:flex;gap:10px;align-items:center;padding:12px 16px 14px}
+
+/* ============ 手记封面卡（作品集核心改造） ============ */
+.scard{
+  background:var(--card);border-radius:var(--r);overflow:hidden;
+  box-shadow:var(--shadow);margin-bottom:22px;
+  transition:box-shadow .2s,transform .16s;
+  cursor:pointer;
+}
+.scard:active{box-shadow:var(--shadow-lift);transform:translateY(-1px)}
+.scard__cover{position:relative;width:100%;aspect-ratio:3/2;background:var(--privacy-bg);overflow:hidden}
+.scard__cover img{width:100%;height:100%;object-fit:cover}
+/* 轻微暗角：提升故事氛围，同时压住照片顶部让标签更清晰 */
+.scard__cover::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 45%,rgba(58,56,53,0) 55%,rgba(58,56,53,.16) 100%);
+}
+.scard__ph{width:100%;height:100%;background:linear-gradient(135deg,var(--privacy-bg),var(--line))}
+/* 已归档：浅薄荷底 + 雾棕字（规范指定）；草稿：隐私条灰底
+   🔴 标签压在照片上，必须自带半透底 + 轻投影才在亮/暗照片上都能读清；
+      实测纯薄荷 #B4D4C8 压在亮天空上几乎消失，而"草稿"反而更显眼 —— 主次颠倒。 */
+.scard__tag{
+  position:absolute;right:12px;top:12px;z-index:2;
+  font-size:11px;letter-spacing:.06em;border-radius:var(--r-sm);
+  padding:4px 10px;
+  box-shadow:0 1px 6px rgba(58,56,53,.18);
+}
+/* 🔴 这里必须用半透而不是实色 var(--mint)：标签压在照片上，实色底在亮天空上会消失。
+      用 rgba(var(--mint-rgb),.94) 既跟主题走、又保住 0.94 的半透底（自测 G 区卡死 α≥.9）。 */
+.scard__tag--ok{background:rgba(var(--mint-rgb),.94);color:var(--ink)}
+.scard__tag--draft{background:rgba(255,255,255,.92);color:var(--ink-2)}
+.scard__body{padding:16px 18px 18px}
+.scard__t{
+  font-size:17px;font-weight:400;color:var(--ink);letter-spacing:.08em;
+  margin:0 0 6px;line-height:1.5;
+}
+.scard__m{font-size:12px;color:var(--ink-2);letter-spacing:.04em;margin:0 0 14px}
+.scard__acts{display:flex;gap:10px;align-items:center}
+
+/* 紧凑摘要行（首页「最近未完成」：不做大封面，避免首页信息过载） */
+.mini{
+  display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+  background:var(--card);border-radius:var(--r);padding:16px 18px;
+  margin-bottom:12px;box-shadow:var(--shadow);
+}
+.mini__t{font-size:15px;font-weight:400;color:var(--ink);letter-spacing:.06em;
+  display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini__m{font-size:12px;color:var(--ink-2);margin-top:3px;display:block}
+.mini .entry__arrow{margin-left:auto;flex:none}
+
+/* ============ 空状态引导页（作品集无手记） ============ */
+.blank{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:64px 20px 72px;
+}
+.blank__art{color:var(--brand);opacity:.55;margin-bottom:22px}
+.blank__t{
+  font-size:16px;font-weight:400;color:var(--ink);letter-spacing:.10em;
+  margin:0 0 10px;
+}
+.blank__d{font-size:13px;color:var(--ink-2);letter-spacing:.05em;margin:0;line-height:1.8}
+
+/* ================= 表单 ================= */
+.fld{margin-bottom:16px}
+.fld__l{font-size:12px;color:var(--ink-2);letter-spacing:.06em;margin-bottom:6px;display:block}
+.fld input[type=text],.fld input[type=password],.fld textarea,.fld select{
+  width:100%;border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:11px 13px;font-size:14px;font-family:inherit;font-weight:300;
+  background:var(--card);color:var(--ink);
+}
+.fld textarea{min-height:84px;resize:vertical;line-height:1.7}
+.switch{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}
+.switch__t{font-size:14px;font-weight:400}
+.switch__d{font-size:11px;color:var(--ink-2);margin-top:2px;line-height:1.6}
+/* 关闭态用 --line（主题的分割线色）而不是写死的灰 —— 换主题后开关才不会突兀 */
+.tgl{width:44px;height:26px;border-radius:99px;background:var(--line);position:relative;flex:none;transition:background .2s}
+.tgl::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tgl--on{background:var(--mint)}
+.tgl--on::after{transform:translateX(18px)}
+
+/* ================= 底部导航（纤细线性图标 + 留白） ================= */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  height:calc(var(--tab-h) + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  /* 导航栏样式随主题包（方案：清简=白底细描边 / 信笺·甜屿=渐变 / 胶片=半透磨砂黑底）
+     --nav-bg 可能是 rgba() 也可能是 linear-gradient()，所以用 background 简写吃两种 */
+  display:flex;background:var(--nav-bg, rgba(var(--paper-rgb),.97));
+  backdrop-filter:blur(var(--nav-blur,12px));
+  border-top:1px solid var(--nav-hairline, var(--line));
+}
+/* 底部导航：选中雾棕 #7A6F65 / 未选中浅灰棕 #8B8680；按压轻微回弹，米白纸感底 */
+.tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  /* 未选中色按**导航自身底色**取（--nav-fg-2），不能吃 --ink-2：
+     深色磨砂导航上的深色字会掉到 1.27:1，肉眼基本读不出来（已实测并修） */
+  color:var(--nav-fg-2,var(--ink-2));padding:6px 0;
+  border-radius:var(--r-sm);
+  transition:color .18s,transform .12s ease,background .18s;
+  -webkit-tap-highlight-color:transparent;
+}
+/* 选中色 = 该主题导航样式的前景色；图标是 currentColor，所以换主题时四个 Tab 一起变。
+   ⚠️ 不用 --brand：磨砂深底主题的 --brand 在浅色模式下是深棕，压近黑底只有 1.6:1；
+   渐变导航的 --brand 压渐变底也只有 3.2~3.9:1，都是不达标的。
+   选中态的**主要**区分手段是这块底色（--nav-chip-a），颜色差异是次要的。 */
+.tab--on{color:var(--nav-fg,var(--brand));background:rgba(var(--nav-fg-rgb,var(--brand-rgb)),var(--nav-chip-a,.10))}
+.tab:active{transform:scale(.93)}
+.tab__i{width:23px;height:23px;display:block;transition:transform .12s ease;
+  /* 图标线稿风格随主题包：清简 1.15 细线 / 信笺 1.4 手绘 / 胶片 1.9 粗描边 / 甜屿 1.5 圆润
+     SVG 的 stroke-width 是 presentation attribute，CSS 可覆盖（内联属性不是 !important） */
+  stroke-width:var(--icon-stroke,1.25);
+}
+.tab:active .tab__i{transform:scale(.93)}
+.tab__t{font-size:11px;letter-spacing:.10em;font-weight:300}
+@media (prefers-reduced-motion:reduce){
+  .tab,.tab__i,.help{transition:none}
+}
+
+/* ================= Toast ================= */
+.toast{
+  position:fixed;left:50%;bottom:calc(var(--tab-h) + 20px);transform:translateX(-50%) translateY(8px);
+  /* 🔴 底色用 --ink-rgb（ink 的 RGB 三元组），不是 --on-ink-rgb。
+     历史上这里写的是 --on-ink-rgb，但那个 token 装的其实是 **ink** 的通道值
+     （亮色 #2F2D2A / 暗色 #F3F0EB），跟名字对应的 --on-ink（亮色是 #FFFFFF）完全对不上
+     —— 名字说谎的 token 迟早被人拿去当"品牌底上的文字色"用，那是个静默的配色事故。
+     本轮把重复的 --ink-rgb 收敛成唯一名字，--on-ink-rgb 已从生成器删除。
+     半透底 + color:var(--on-ink) 的组合不变，所以视觉零变化（证据图仍然有效）。*/
+  background:rgba(var(--ink-rgb),.92);color:var(--on-ink);font-size:13px;letter-spacing:.04em;
+  padding:10px 18px;border-radius:99px;z-index:60;opacity:0;pointer-events:none;
+  transition:opacity .28s,transform .28s;max-width:80vw;text-align:center;
+}
+.toast--on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ================= 折叠区 ================= */
+.fold__h{display:flex;align-items:center;justify-content:space-between;width:100%;
+  font-size:13px;color:var(--ink-2);letter-spacing:.06em;padding:10px 0}
+.fold__b{display:none}
+.fold--open .fold__b{display:block}
+
+/* ================= 高级设置折叠（方案 §5.4） ================= */
+.adv{
+  background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);
+  margin:14px 0 20px;overflow:hidden;
+}
+.adv__sum{
+  list-style:none;cursor:pointer;
+  padding:16px 18px;font-size:13px;color:var(--ink-2);letter-spacing:.06em;
+  display:flex;align-items:center;gap:8px;
+}
+.adv__sum::-webkit-details-marker{display:none}
+.adv__sum::after{content:'展开';margin-left:auto;font-size:11px;color:var(--brand);opacity:.7}
+.adv[open] .adv__sum::after{content:'收起'}
+.adv__b{padding:0 18px 18px;border-top:1px solid var(--line);padding-top:16px}
+
+/* ================= V1.5 主题选择页（选择你的主题气质） ================= */
+.theme-list{display:flex;flex-direction:column;gap:12px}
+.theme{
+  display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  background:var(--card);border-radius:var(--r);
+  border:1.5px solid transparent;padding:14px 16px;
+  box-shadow:var(--shadow);
+  transition:border-color .2s,box-shadow .2s,transform .12s;
+}
+.theme:active{transform:scale(.99);box-shadow:var(--shadow-lift)}
+/* 当前主题：主色描边 + 勾选。用主色而非薄荷，四个主题下都看得清 */
+.theme--on{border-color:var(--brand);box-shadow:var(--shadow-lift)}
+/* 预览：四道竖色条 = 底 / 主 / 辅 / 一级文字，一眼看出气质差异 */
+.theme__sw{display:flex;flex:none;width:52px;height:52px;border-radius:var(--r-sm);overflow:hidden;opacity:.95}
+.theme__sw i{flex:1;display:block}
+.theme__t{font-size:15px;font-weight:400;color:var(--ink);letter-spacing:.06em}
+.theme__d{font-size:11.5px;color:var(--ink-2);margin-top:3px;letter-spacing:.03em;line-height:1.5}
+.theme__ck{flex:none;margin-left:auto;display:flex;color:var(--brand)}
+
+/* ================= 更新弹窗（方案 §2.9 文案定稿） ================= */
+.umask{
+  position:fixed;inset:0;z-index:70;
+  /* 遮罩底色同 .toast，用 --ink-rgb（见 .toast 处的说明：--on-ink-rgb 已删除） */
+  background:rgba(var(--ink-rgb),.32);
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.umodal{
+  width:100%;max-width:340px;background:var(--card);
+  border-radius:var(--r);padding:24px 22px 20px;
+  box-shadow:var(--shadow-lift);
+  /* 弹窗也用主题动效（P0-3）：不光页面进场跟着主题变，弹出来的节奏也一致。
+     注意 keyframes 也必须吃 --mo-shift —— 只在 animation 里换时长、位移仍是写死的 10px，
+     那 --mo-shift 就只被 .view 一处使用，动效"一套语言"的说法就不成立了。 */
+  animation:up var(--mo-dur,.26s) var(--mo-ease,ease-out);
+}
+@keyframes up{from{opacity:0;transform:translateY(var(--mo-shift,10px))}to{opacity:1;transform:none}}
+.umodal__t{font-size:17px;font-weight:400;color:var(--brand);letter-spacing:.08em;margin-bottom:12px}
+.umodal__b{font-size:14px;color:var(--ink);line-height:1.75;margin-bottom:20px;letter-spacing:.03em}
+.umodal__acts{display:flex;flex-direction:column;gap:10px}
+
+h2{font-size:14px;font-weight:400;color:var(--ink-2);letter-spacing:.10em;margin:26px 0 12px}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+}

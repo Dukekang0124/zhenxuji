@@ -1,0 +1,157 @@
+name: Build 帧叙集 APK
+
+# 触发：push tag v*（发版）或手动（release 默认；debug 签名随机，不可覆盖安装）
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      buildType:
+        description: 'release (fixed keystore) or debug (random signature)'
+        required: true
+        default: 'release'
+        type: choice
+        options: [release, debug]
+
+permissions:
+  contents: write
+
+env:
+  BUILD_TYPE: ${{ github.event.inputs.buildType || 'release' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'   # Capacitor CLI 8.x requires Node >= 22
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build web assets into www/
+        run: npm run build:web
+
+      - name: Create android project (not committed — generated each run)
+        run: |
+          rm -rf android
+          node ./node_modules/@capacitor/cli/bin/capacitor add android > cap_add.log 2>&1 || echo "CAP_FAILED=1" >> "$GITHUB_ENV"
+          test -f android/app/build.gradle || {
+            echo "::error::log-tail:$(tail -c 350 cap_add.log 2>/dev/null | tr '\n' '~')"
+            exit 1
+          }
+
+      # 🔴 帧叙集核心：相册权限。方案的「部分照片 / 完整相册两级权限」在 Android 上
+      #    对应两级真实 API，漏任一权限都会让相册扫描直接空返回：
+      #      • READ_MEDIA_IMAGES            —— Android 13(API33)+ 完整读图
+      #      • READ_MEDIA_VISUAL_USER_SELECTED —— Android 14(API34)+ **部分照片访问**（用户勾选）
+      #      • READ_EXTERNAL_STORAGE        —— API ≤32 旧模型（必须带 maxSdkVersion，否则
+      #                                        Android 13+ 上被系统直接忽略并可能触发商店审核问题）
+      #    注：MVP 只处理图片，不申请 READ_MEDIA_VIDEO（视频直接跳过）。
+      - name: Inject photo library permissions
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          grep -q "READ_MEDIA_IMAGES" $M || sed -i 's#<uses-permission android:name="android.permission.INTERNET"#<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <uses-permission android:name="android.permission.INTERNET"#' $M
+          grep -o 'android.permission.[A-Z_]*' $M | sort -u
+
+      - name: Resolve version from index.html (single source of truth)
+        id: ver
+        run: |
+          V=$(node -e "const h=require('fs').readFileSync('index.html','utf8');const m=h.match(/window\.APP_VERSION = '([\d.]+)'/);process.stdout.write(m[1])")
+          IFS='.' read -r MA MI PA <<< "$V"
+          CODE=$((MA*10000 + MI*100 + PA))
+          echo "version=$V" >> $GITHUB_OUTPUT
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+          echo "versionName/versionCode = $V / $CODE"
+
+      - name: Stamp versionName & versionCode
+        run: |
+          sed -i "s/versionCode 1/versionCode ${{ steps.ver.outputs.code }}/" android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"${{ steps.ver.outputs.version }}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Grant gradlew
+        run: chmod +x android/gradlew
+
+      # 体积闸门：cap sync 不读 .gitignore，混入归档/依赖会把 APK 撑到几十 MB
+      - name: Size gate (web assets <= 20MB)
+        run: |
+          SIZE_MB=$(du -sm android/app/src/main/assets/public | cut -f1)
+          echo "web assets: ${SIZE_MB}MB"
+          BAD=$(find android/app/src/main/assets/public -type f \( -name '*.apk' -o -name '*.zip' \) -print)
+          if [ -n "$BAD" ]; then echo "::error::发现归档文件被打包：$BAD"; exit 1; fi
+          if [ "$SIZE_MB" -gt 20 ]; then echo "::error::web 资产 ${SIZE_MB}MB 超限"; exit 1; fi
+
+      - name: Build APK
+        run: |
+          cd android
+          set +e
+          ./gradlew assemble${{ env.BUILD_TYPE == 'debug' && 'Debug' || 'Release' }} --no-daemon 2>&1 | tee /tmp/gradle.log
+          RC=${PIPESTATUS[0]}
+          if [ "$RC" -ne 0 ]; then
+            ERR=$(grep -nE "error:|cannot find symbol|Execution failed|What went wrong|FAILED|NewApi|requires API level" /tmp/gradle.log | head -25 | tr '\n' '~')
+            echo "::error title=gradle-build-failed::${ERR}"
+            echo "::error title=gradle-tail::$(tail -45 /tmp/gradle.log | tr '\n' '~')"
+          fi
+          exit "$RC"
+
+      # 固定 keystore：签名不一致 = 无法覆盖安装 = WebView 里的本地数据全丢。
+      # 首次构建生成后 commit 回仓库固化（沿用词汇生长的做法）。
+      - name: Sign release with fixed keystore
+        if: env.BUILD_TYPE == 'release'
+        run: |
+          if [ ! -f android/zhenxuji-release.keystore ]; then
+            keytool -genkeypair -v -keystore android/zhenxuji-release.keystore -alias zhenxuji \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass zhenxuji1234 -keypass zhenxuji1234 \
+              -dname "CN=ZhenXuJi, O=SuBuJuan, C=CN"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add android/zhenxuji-release.keystore
+            git commit -m "chore: 固化 APK 签名密钥（保证覆盖安装签名一致）" || echo "nothing to commit"
+            git push || echo "push skipped"
+          fi
+
+      - name: Rename & expose artifact
+        run: |
+          T=${BUILD_TYPE}
+          if [ "$T" = "debug" ]; then SRC=android/app/build/outputs/apk/debug/app-debug.apk; else SRC=android/app/build/outputs/apk/release/app-release.apk; fi
+          mkdir -p dist
+          cp "$SRC" "dist/帧叙集-v${{ steps.ver.outputs.version }}-$T.apk"
+          # 🔴 再存一份**固定文件名**，专供 App 内「检查更新」使用。
+          #    version.json 里 update_url 若写成版本号文件名，每次发版都得手改配置；
+          #    固定名 + GitHub Release 的 releases/latest/download/<name> 组合，
+          #    就是一个**永久稳定、自动指向最新版**的下载地址：
+          #      https://github.com/<owner>/<repo>/releases/latest/download/zhenxuji-latest.apk
+          #    只对 release 包做，debug 包签名随机、覆盖安装会丢本地数据，不该被自动更新拉过去。
+          if [ "$T" = "release" ]; then cp "$SRC" "dist/zhenxuji-latest.apk"; fi
+          ls -lh dist
+
+      # 不变量：APK 内网页版本必须等于发布版本（防"包是旧的"）
+      - name: Verify APK contents
+        run: |
+          V=${{ steps.ver.outputs.version }}
+          unzip -p dist/*.apk assets/public/index.html | grep -o "window.APP_VERSION = '$V'" || { echo "::error::APK 内 APP_VERSION != $V"; exit 1; }
+          echo "APK 内资产版本 = $V ✓"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 帧叙集-v${{ steps.ver.outputs.version }}-${{ env.BUILD_TYPE }}
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Attach APK to GitHub Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: true

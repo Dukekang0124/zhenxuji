@@ -1,0 +1,26 @@
+{
+  "name": "zhenxuji",
+  "version": "0.1.0",
+  "description": "帧叙集 — 相册批量整理 + AI 选片 + 故事手记（多模块无构建 PWA + Capacitor APK）",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/gen-icons.mjs",
+    "build:web": "node scripts/build-web.mjs",
+    "cap:add": "npm run build:web && npx cap add android",
+    "cap:sync": "npm run build:web && npx cap sync android",
+    "apk:debug": "npm run cap:sync && cd android && ./gradlew assembleDebug",
+    "serve": "node _selftest/server.cjs",
+    "selftest": "node _selftest/selftest.cjs",
+    "gen:theme": "node scripts/gen-theme.mjs",
+    "check:theme": "node scripts/check-theme-contrast.mjs && node scripts/verify-gen-theme.mjs",
+    "check:texture": "node scripts/check-texture-render.cjs",
+    "tune:contrast": "node scripts/tune-contrast-headroom.mjs",
+    "changelog": "node scripts/gen-changelog.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1"
+  },
+  "private": true
+}

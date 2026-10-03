@@ -1,0 +1,818 @@
+{
+  "schemaVersion": "1.0.0",
+  "product": "帧叙集",
+  "updatedAt": "2026-10-03",
+  "source": "帧叙集｜总方案增补：全界面主题换肤体系",
+  "readme": [
+    "本文件是主题系统唯一真相源（single source of truth）。",
+    "颜色/圆角/字体/图标风格/导航样式/故事册模板全部在此配置，代码侧不得再写死。",
+    "rgb 通道串与阴影由 scripts/gen-theme.mjs 从 hex 派生，不要手写，避免漂移。",
+    "新增一套主题 = 在 packs 里加一项，不改任何页面代码（方案风险1的应对要求）。",
+    "每套主题的 light/dark 双模式对应方案『明暗模式作为每套主题内部子选项』。",
+    "group: scene = 场景主题（新四套，女性向场景化），classic = 经典主题（V1.5 四套，素雅耐看）",
+    "defaultMode: auto = 跟随系统亮暗；也可强制 light / dark"
+  ],
+  "defaultPack": "origin",
+  "defaultMode": "auto",
+  "radiusScales": {
+    "compact": {
+      "card": 16,
+      "control": 12,
+      "chip": 8,
+      "pill": 999
+    },
+    "soft": {
+      "card": 20,
+      "control": 14,
+      "chip": 10,
+      "pill": 999
+    },
+    "large": {
+      "card": 22,
+      "control": 16,
+      "chip": 12,
+      "pill": 999
+    },
+    "xl": {
+      "card": 26,
+      "control": 18,
+      "chip": 14,
+      "pill": 999
+    }
+  },
+  "fontSets": {
+    "sans-thin": {
+      "label": "纤细无衬线",
+      "family": "\"Source Han Sans SC\",\"Noto Sans SC\",\"PingFang SC\",\"HarmonyOS Sans SC\",\"Microsoft YaHei\",system-ui,sans-serif",
+      "bodyWeight": 300,
+      "titleWeight": 300,
+      "letterSpacing": "0.06em",
+      "packaged": false,
+      "note": "titleWeight 300 = 保留 V1.5 主标题的纤细观感；主标题字距 = letterSpacing + 0.08em（见 styles.css .page-title）"
+    },
+    "serif-soft": {
+      "label": "清雅宋体",
+      "family": "\"Source Han Serif SC\",\"Noto Serif SC\",\"Songti SC\",\"STSong\",\"SimSun\",serif",
+      "bodyWeight": 400,
+      "titleWeight": 500,
+      "letterSpacing": "0.05em",
+      "packaged": false,
+      "note": "走系统宋体，零体积成本；若要统一到思源宋体需打包字体文件（+3~5MB）"
+    },
+    "handwrite": {
+      "label": "手写信笺",
+      "family": "\"LXGW WenKai\",\"Kaiti SC\",\"STKaiti\",\"KaiTi\",\"Songti SC\",serif",
+      "bodyWeight": 400,
+      "titleWeight": 500,
+      "letterSpacing": "0.04em",
+      "packaged": false,
+      "note": "LXGW WenKai 若未安装则回落系统楷体；手写感强度取决于设备，安卓常见回落为思源宋"
+    },
+    "rounded-soft": {
+      "label": "圆润柔体",
+      "family": "\"Yuanti SC\",\"HarmonyOS Sans SC\",\"PingFang SC\",\"Microsoft YaHei\",system-ui,sans-serif",
+      "bodyWeight": 400,
+      "titleWeight": 500,
+      "letterSpacing": "0.04em",
+      "packaged": false
+    }
+  },
+  "navStyles": {
+    "solid-light": {
+      "kind": "solid",
+      "base": "paper",
+      "alpha": 0.94,
+      "hairline": "line",
+      "fg": "brand",
+      "fg2": "ink2",
+      "chipAlpha": 0.12,
+      "note": "fg/fg2 = 导航上的选中/未选中文字与图标色。必须按**导航自身底色**取，不能一律抄 brand/ink2 —— 深色磨砂底上抄浅底色系的 token 会掉到 1.27:1（不可读，已实测）。chipAlpha = 选中项底色块浓度。"
+    },
+    "gradient-soft": {
+      "kind": "gradient",
+      "from": "paper",
+      "to": "accent",
+      "stop": "200%",
+      "hairline": "accent",
+      "fg": "ink",
+      "fg2": "ink",
+      "chipAlpha": 0.18,
+      "note": "渐变导航的底色横跨纸底→主色，可用余量极小：实测 brand/ink2 压在纸底上就只有 4.58~5.00，任何可见的渐变都会破 4.5。所以前景只能用最强 ink（最坏 5.64:1），选中态改由**色块 + 字重**表达。stop 从 150% 收到 200%，让导航底部只走到 from→to 的 50%，兼顾「看得见渐变」与「读得清」。若要恢复品牌色选中态，需先把浅色模式的 brand 对比度抬到 ≥5.5 留出余量（属配色决策，待定）。"
+    },
+    "frosted-dark": {
+      "kind": "blur",
+      "base": "#0E0B08",
+      "alpha": 0.72,
+      "blur": 14,
+      "hairline": "accent",
+      "fg": "#F6EFE4",
+      "fg2": "#C6BBAA",
+      "chipAlpha": 0.18,
+      "note": "底色恒为近黑（不随明暗变），故前景必须是亮色字面量：实测 #F6EFE4 在亮/暗两模式下分别 7.57 / 16.93，#C6BBAA 为 4.57 / 10.21，均过 AA 4.5。"
+    }
+  },
+  "iconStyles": {
+    "line-thin": {
+      "strokeWidth": 1.15,
+      "linecap": "round",
+      "linejoin": "round",
+      "fill": "none",
+      "note": "细线性简约"
+    },
+    "hand-line": {
+      "strokeWidth": 1.4,
+      "linecap": "round",
+      "linejoin": "round",
+      "fill": "none",
+      "note": "圆润手绘细线"
+    },
+    "bold-retro": {
+      "strokeWidth": 1.9,
+      "linecap": "round",
+      "linejoin": "round",
+      "fill": "none",
+      "note": "粗描边复古"
+    },
+    "round-fill": {
+      "strokeWidth": 1.5,
+      "linecap": "round",
+      "linejoin": "round",
+      "fill": "accentSoft",
+      "note": "圆润填充风，局部用 accent 淡填充"
+    }
+  },
+  "textures": {
+    "none": {
+      "label": "留白无肌理",
+      "kind": "none",
+      "delta": 0,
+      "opacity": 0,
+      "blend": "normal",
+      "tile": 0,
+      "note": "不铺任何肌理，纯色纸底。delta=0 表示对文字对比度零影响。"
+    },
+    "paper-grain": {
+      "label": "纸张颗粒",
+      "kind": "noise",
+      "delta": 0.035,
+      "opacity": 0.22,
+      "blend": "overlay",
+      "tile": 160,
+      "note": "细腻纸纹（overlay 混合，对中间调近乎中性，只加局部颗粒）。delta 由 scripts/check-texture-render.cjs 在真 Chrome 里量渲染像素回填（实测上界 0.0294，取 0.035 留余量）—— 早期这里是拍脑袋写的 0.03，而实现用的是 multiply+浓度.5，实测等效偏移 0.31，属于声明低报，对比度闸门因此给出假全绿。"
+    },
+    "film-grain": {
+      "label": "胶片颗粒",
+      "kind": "noise",
+      "delta": 0.055,
+      "opacity": 0.6,
+      "blend": "overlay",
+      "tile": 110,
+      "note": "更粗的噪点（overlay 混合）。实测等效偏移上界 0.0495，声明取 0.055。"
+    },
+    "soft-glow": {
+      "label": "柔光弥散",
+      "kind": "glow",
+      "delta": 0.03,
+      "opacity": 0.5,
+      "blend": "normal",
+      "tile": 0,
+      "note": "大范围径向柔光（用主题 accent 着色，峰值 = .18 × opacity）。实测等效偏移上界 0.0218，声明取 0.03。"
+    }
+  },
+  "cardStyles": {
+    "hairline-flat": {
+      "label": "细描边纸卡",
+      "borderWidth": 1,
+      "hairline": "line",
+      "inner": "0 0 0 rgba(0,0,0,0)",
+      "deco": "none",
+      "note": "只有一圈极细描边，不用阴影 —— 最'平'的一种，适合极简。"
+    },
+    "soft-lift": {
+      "label": "柔光浮起",
+      "borderWidth": 0,
+      "hairline": "line",
+      "inner": "0 0 0 rgba(0,0,0,0)",
+      "deco": "none",
+      "note": "无描边，靠阴影浮起（阴影浓度仍由每套主题的 shadow 决定）。"
+    },
+    "tape-corner": {
+      "label": "胶带角贴",
+      "borderWidth": 0,
+      "hairline": "line",
+      "inner": "inset 0 1px 0 rgba(255,255,255,.46)",
+      "deco": "tape",
+      "note": "左上角一条半透明胶带 + 顶部内高光，纸感手帐味。deco 用 background-image 实现，不占伪元素、不改定位。"
+    },
+    "thick-frame": {
+      "label": "粗描边画框",
+      "borderWidth": 2,
+      "hairline": "ink2",
+      "inner": "0 0 0 rgba(0,0,0,0)",
+      "deco": "none",
+      "note": "描边明显加粗到 2px、改用 ink2 色（比 line 重），像给照片装了个画框。⚠️ 不用 1.5px：Chrome 会把边框宽取整成整数像素，量出来是 1px —— 既看不出「粗」、自测里也和 1px 的细描边撞成同一个值，断言失去鉴别力。"
+    }
+  },
+  "motions": {
+    "calm": {
+      "label": "安静",
+      "duration": "0.34s",
+      "ease": "cubic-bezier(.4,0,.2,1)",
+      "shift": 6,
+      "note": "标准缓入缓出，位移最小。"
+    },
+    "crisp": {
+      "label": "干脆",
+      "duration": "0.18s",
+      "ease": "cubic-bezier(.2,0,0,1)",
+      "shift": 3,
+      "note": "短促利落，几乎没有回弹，适合复古/杂志这类硬朗风格。"
+    },
+    "float": {
+      "label": "浮起",
+      "duration": "0.5s",
+      "ease": "cubic-bezier(.22,.61,.36,1)",
+      "shift": 12,
+      "note": "慢且位移大，像纸片飘上来。"
+    },
+    "lively": {
+      "label": "轻快",
+      "duration": "0.28s",
+      "ease": "cubic-bezier(.34,1.56,.64,1)",
+      "shift": 8,
+      "note": "带轻微过冲回弹，活泼。"
+    }
+  },
+  "storyTemplates": {
+    "minimal-ins": {
+      "label": "极简 ins 册",
+      "layout": "grid-3",
+      "captionPosition": "below",
+      "decoration": "none",
+      "frameStyle": "none",
+      "background": "card"
+    },
+    "forest-letter": {
+      "label": "森系信笺册",
+      "layout": "stagger",
+      "captionPosition": "side",
+      "decoration": "leaf",
+      "frameStyle": "paper-tape",
+      "background": "card"
+    },
+    "film-memo": {
+      "label": "复古胶片手账",
+      "layout": "strip",
+      "captionPosition": "overlay",
+      "decoration": "grain",
+      "frameStyle": "film-perforation",
+      "background": "card"
+    },
+    "sweet-scrap": {
+      "label": "甜美拼贴册",
+      "layout": "collage",
+      "captionPosition": "bubble",
+      "decoration": "sticker",
+      "frameStyle": "thick-white",
+      "background": "card"
+    }
+  },
+  "packs": [
+    {
+      "key": "origin",
+      "name": "原初·清简",
+      "isDefault": true,
+      "tagline": "极简高级，最像一本还没写字的册子",
+      "scenes": [
+        "日常记录",
+        "通勤碎片",
+        "随手拍"
+      ],
+      "iconStyle": "line-thin",
+      "navStyle": "solid-light",
+      "fontSet": "sans-thin",
+      "radiusScale": "compact",
+      "storyTemplate": "minimal-ins",
+      "shadow": {
+        "light": {
+          "base": 0.06,
+          "lift": 0.1
+        },
+        "dark": {
+          "base": 0.5,
+          "lift": 0.6
+        }
+      },
+      "launch": {
+        "style": "paper-plain",
+        "titleWeight": 300,
+        "showMark": true
+      },
+      "desktopIcon": "icon-origin",
+      "texture": "none",
+      "cardStyle": "hairline-flat",
+      "motion": "calm",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#F7F5F2",
+            "brand": "#6B6459",
+            "accent": "#C9D6CE",
+            "ink": "#2F2D2A",
+            "ink2": "#6F6A64",
+            "line": "#E7E3DF",
+            "card": "#FFFFFF",
+            "privacyBg": "#F1EDE8",
+            "muted": "#6F6A64",
+            "onBrand": "#FFFFFF",
+            "alert": "#A8554B"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#1B1A18",
+            "brand": "#CFC7BB",
+            "accent": "#7E9A8C",
+            "ink": "#F3F0EB",
+            "ink2": "#ABA49C",
+            "line": "#322F2C",
+            "card": "#232120",
+            "privacyBg": "#26231F",
+            "muted": "#ABA49C",
+            "onBrand": "#1B1A18",
+            "alert": "#E0918A"
+          }
+        }
+      },
+      "group": "scene"
+    },
+    {
+      "key": "forest",
+      "name": "山野信笺",
+      "isDefault": false,
+      "tagline": "低饱和草木绿配奶油纸，把旅行折进信里",
+      "scenes": [
+        "旅行风景",
+        "山野徒步",
+        "户外人像"
+      ],
+      "iconStyle": "hand-line",
+      "navStyle": "gradient-soft",
+      "fontSet": "handwrite",
+      "radiusScale": "soft",
+      "storyTemplate": "forest-letter",
+      "shadow": {
+        "light": {
+          "base": 0.07,
+          "lift": 0.11
+        },
+        "dark": {
+          "base": 0.5,
+          "lift": 0.6
+        }
+      },
+      "launch": {
+        "style": "paper-plain",
+        "titleWeight": 400,
+        "showMark": true
+      },
+      "desktopIcon": "icon-forest",
+      "texture": "paper-grain",
+      "cardStyle": "tape-corner",
+      "motion": "float",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#F7F4EA",
+            "brand": "#4F6B54",
+            "accent": "#A8BFA0",
+            "ink": "#2C362E",
+            "ink2": "#5E6D5C",
+            "line": "#E3E1D3",
+            "card": "#FFFDF8",
+            "privacyBg": "#F0EEE0",
+            "muted": "#5E6D5C",
+            "onBrand": "#FFFDF8",
+            "alert": "#9E5738"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#191D19",
+            "brand": "#A6C2A8",
+            "accent": "#6E8A70",
+            "ink": "#EEF3EA",
+            "ink2": "#9FAA9B",
+            "line": "#2C342C",
+            "card": "#202620",
+            "privacyBg": "#23291F",
+            "muted": "#9FAA9B",
+            "onBrand": "#191D19",
+            "alert": "#E29A78"
+          }
+        }
+      },
+      "group": "scene"
+    },
+    {
+      "key": "film",
+      "name": "胶片叙忆",
+      "isDefault": false,
+      "tagline": "暖棕胶片配金线，旧照片终于有了该有的样子",
+      "scenes": [
+        "老照片",
+        "旅行氛围",
+        "夜景街拍"
+      ],
+      "iconStyle": "bold-retro",
+      "navStyle": "frosted-dark",
+      "fontSet": "serif-soft",
+      "radiusScale": "large",
+      "storyTemplate": "film-memo",
+      "shadow": {
+        "light": {
+          "base": 0.08,
+          "lift": 0.13
+        },
+        "dark": {
+          "base": 0.55,
+          "lift": 0.65
+        }
+      },
+      "launch": {
+        "style": "film-dark",
+        "titleWeight": 500,
+        "showMark": true
+      },
+      "desktopIcon": "icon-film",
+      "texture": "film-grain",
+      "cardStyle": "thick-frame",
+      "motion": "crisp",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#F2E9DC",
+            "brand": "#7A5024",
+            "accent": "#C9A063",
+            "ink": "#342414",
+            "ink2": "#6E5638",
+            "line": "#DFD0B9",
+            "card": "#FCF5EA",
+            "privacyBg": "#EBDFCB",
+            "muted": "#6E5638",
+            "onBrand": "#FCF5EA",
+            "alert": "#A6442F"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#17120E",
+            "brand": "#D9B476",
+            "accent": "#8C6239",
+            "ink": "#F5E9D6",
+            "ink2": "#B79A76",
+            "line": "#322619",
+            "card": "#201913",
+            "privacyBg": "#251C14",
+            "muted": "#B79A76",
+            "onBrand": "#17120E",
+            "alert": "#E88B6F"
+          }
+        }
+      },
+      "group": "scene"
+    },
+    {
+      "key": "sweet",
+      "name": "甜屿碎光",
+      "isDefault": false,
+      "tagline": "淡粉奶杏配超大圆角，甜品和闺蜜合照就该这么甜",
+      "scenes": [
+        "美食探店",
+        "闺蜜合照",
+        "日常自拍"
+      ],
+      "iconStyle": "round-fill",
+      "navStyle": "gradient-soft",
+      "fontSet": "rounded-soft",
+      "radiusScale": "xl",
+      "storyTemplate": "sweet-scrap",
+      "shadow": {
+        "light": {
+          "base": 0.06,
+          "lift": 0.11
+        },
+        "dark": {
+          "base": 0.5,
+          "lift": 0.6
+        }
+      },
+      "launch": {
+        "style": "paper-plain",
+        "titleWeight": 500,
+        "showMark": true
+      },
+      "desktopIcon": "icon-sweet",
+      "texture": "soft-glow",
+      "cardStyle": "soft-lift",
+      "motion": "lively",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#FDF4F1",
+            "brand": "#AB4E66",
+            "accent": "#F2C6B4",
+            "ink": "#3A2830",
+            "ink2": "#7D6570",
+            "line": "#F1DFDB",
+            "card": "#FFFFFF",
+            "privacyBg": "#FBEAE6",
+            "muted": "#7D6570",
+            "onBrand": "#FFFFFF",
+            "alert": "#B54A36"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#201719",
+            "brand": "#EBA7BB",
+            "accent": "#C99A8A",
+            "ink": "#FCEEF1",
+            "ink2": "#B99AA5",
+            "line": "#382A2F",
+            "card": "#2A1F22",
+            "privacyBg": "#2E2225",
+            "muted": "#B99AA5",
+            "onBrand": "#201719",
+            "alert": "#F0937A"
+          }
+        }
+      },
+      "group": "scene"
+    },
+    {
+      "key": "paper",
+      "group": "classic",
+      "name": "纸感原生",
+      "isDefault": false,
+      "tagline": "米白纸底 + 雾棕线条，最像一本没写字的册子",
+      "scenes": [
+        "日常记录",
+        "书桌碎片"
+      ],
+      "iconStyle": "line-thin",
+      "navStyle": "solid-light",
+      "fontSet": "sans-thin",
+      "radiusScale": "compact",
+      "storyTemplate": "minimal-ins",
+      "shadow": {
+        "light": {
+          "base": 0.06,
+          "lift": 0.1
+        },
+        "dark": {
+          "base": 0.5,
+          "lift": 0.6
+        }
+      },
+      "launch": {
+        "style": "paper-plain",
+        "titleWeight": 400,
+        "showMark": true
+      },
+      "desktopIcon": "icon-paper",
+      "texture": "paper-grain",
+      "cardStyle": "soft-lift",
+      "motion": "calm",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#F7F4F0",
+            "brand": "#746961",
+            "accent": "#B4D4C8",
+            "ink": "#3A3835",
+            "ink2": "#6F6A66",
+            "line": "#E6E1DD",
+            "card": "#FFFFFF",
+            "muted": "#706A63",
+            "onBrand": "#FBF9F7",
+            "alert": "#A3544B"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#1C1A18",
+            "brand": "#C9C0B6",
+            "accent": "#7E9A8C",
+            "ink": "#F2EEE9",
+            "ink2": "#A79F97",
+            "line": "#33302D",
+            "card": "#242220",
+            "privacyBg": "#272422",
+            "muted": "#A79F97",
+            "onBrand": "#1C1A18",
+            "alert": "#DE9086"
+          }
+        }
+      }
+    },
+    {
+      "key": "cream",
+      "group": "classic",
+      "name": "奶油奶茶",
+      "isDefault": false,
+      "tagline": "暖调奶油底，像一杯加了奶的下午茶",
+      "scenes": [
+        "下午茶",
+        "咖啡馆"
+      ],
+      "iconStyle": "hand-line",
+      "navStyle": "gradient-soft",
+      "fontSet": "rounded-soft",
+      "radiusScale": "soft",
+      "storyTemplate": "sweet-scrap",
+      "shadow": {
+        "light": {
+          "base": 0.07,
+          "lift": 0.11
+        },
+        "dark": {
+          "base": 0.5,
+          "lift": 0.6
+        }
+      },
+      "launch": {
+        "style": "paper-plain",
+        "titleWeight": 400,
+        "showMark": true
+      },
+      "desktopIcon": "icon-cream",
+      "texture": "soft-glow",
+      "cardStyle": "tape-corner",
+      "motion": "float",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#FAF5EF",
+            "brand": "#826752",
+            "accent": "#D4B5A0",
+            "ink": "#4A3B33",
+            "ink2": "#7C685C",
+            "line": "#EDE1D6",
+            "card": "#FFFCF8",
+            "muted": "#7A695B",
+            "onBrand": "#FDFAF6",
+            "alert": "#A3564C"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#1E1815",
+            "brand": "#D9BFA6",
+            "accent": "#A8846B",
+            "ink": "#F6EDE3",
+            "ink2": "#B29C8A",
+            "line": "#34291F",
+            "card": "#262019",
+            "privacyBg": "#2A231C",
+            "muted": "#B29C8A",
+            "onBrand": "#1E1815",
+            "alert": "#E09C7E"
+          }
+        }
+      }
+    },
+    {
+      "key": "magazine",
+      "group": "classic",
+      "name": "杂志冷调",
+      "isDefault": false,
+      "tagline": "偏冷的灰白底，接近纸质感杂志的内页",
+      "scenes": [
+        "街拍",
+        "建筑"
+      ],
+      "iconStyle": "line-thin",
+      "navStyle": "solid-light",
+      "fontSet": "sans-thin",
+      "radiusScale": "compact",
+      "storyTemplate": "minimal-ins",
+      "shadow": {
+        "light": {
+          "base": 0.07,
+          "lift": 0.11
+        },
+        "dark": {
+          "base": 0.5,
+          "lift": 0.6
+        }
+      },
+      "launch": {
+        "style": "paper-plain",
+        "titleWeight": 400,
+        "showMark": true
+      },
+      "desktopIcon": "icon-magazine",
+      "texture": "none",
+      "cardStyle": "thick-frame",
+      "motion": "crisp",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#F2F3F1",
+            "brand": "#5D645F",
+            "accent": "#A9B5AE",
+            "ink": "#2F3431",
+            "ink2": "#686E6A",
+            "line": "#DFE2DF",
+            "card": "#FFFFFF",
+            "muted": "#686E6A",
+            "onBrand": "#FFFFFF",
+            "alert": "#A7554C"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#16181A",
+            "brand": "#C3CBC6",
+            "accent": "#7C8A83",
+            "ink": "#EDF0EE",
+            "ink2": "#9BA5A0",
+            "line": "#2B3033",
+            "card": "#1E2123",
+            "privacyBg": "#212527",
+            "muted": "#9BA5A0",
+            "onBrand": "#16181A",
+            "alert": "#E09A92"
+          }
+        }
+      }
+    },
+    {
+      "key": "retro",
+      "group": "classic",
+      "name": "轻复古手账",
+      "isDefault": false,
+      "tagline": "偏黄的旧纸底 + 深棕线，像用了半年的手账",
+      "scenes": [
+        "旧照片",
+        "手账"
+      ],
+      "iconStyle": "bold-retro",
+      "navStyle": "frosted-dark",
+      "fontSet": "handwrite",
+      "radiusScale": "large",
+      "storyTemplate": "film-memo",
+      "shadow": {
+        "light": {
+          "base": 0.08,
+          "lift": 0.12
+        },
+        "dark": {
+          "base": 0.5,
+          "lift": 0.6
+        }
+      },
+      "launch": {
+        "style": "paper-plain",
+        "titleWeight": 400,
+        "showMark": true
+      },
+      "desktopIcon": "icon-retro",
+      "texture": "film-grain",
+      "cardStyle": "hairline-flat",
+      "motion": "lively",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#F5EFE6",
+            "brand": "#7D604B",
+            "accent": "#B59778",
+            "ink": "#3E3026",
+            "ink2": "#756355",
+            "line": "#E7DBCD",
+            "card": "#FBF7F0",
+            "muted": "#776251",
+            "onBrand": "#FBF6EF",
+            "alert": "#9B5147"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#191310",
+            "brand": "#D9B194",
+            "accent": "#9C7B54",
+            "ink": "#F5E9DC",
+            "ink2": "#B79C82",
+            "line": "#322619",
+            "card": "#211A15",
+            "privacyBg": "#251D17",
+            "muted": "#B79C82",
+            "onBrand": "#191310",
+            "alert": "#E4917A"
+          }
+        }
+      }
+    }
+  ]
+}

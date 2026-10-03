@@ -1,0 +1,20 @@
+# Cloudflare Pages 静态资源响应头
+#
+# 🔴 为什么必须有这个文件：
+#    APK 端 WebView 的 origin 恒为 `https://localhost`，它要问**包外**的线上站点
+#    拿 version.json。CF Pages 的静态资源默认**不带** Access-Control-Allow-Origin，
+#    缺了它浏览器会直接拦掉跨域响应 → 端侧 catch 到异常 → 静默降级成「网络异常」。
+#    表现就是：Web 端更新正常，APK 端永远收不到更新，而且不报任何错。
+#    （这条是实测确认的：CORS 失败在 fetch 里只表现为一个 TypeError，和断网长得一样。）
+#
+# 部署前提：CF Pages 的发布目录必须包含本文件（本项目为 `www/`，由 npm run build:web 生成）。
+# 若发布目录不是 www/，把本文件放到真正的发布根目录下。
+
+/version.json
+  Access-Control-Allow-Origin: *
+  Cache-Control: no-cache
+
+# APK 安装包（若把安装包托管在同站点 /apk/ 下，同样需要跨域可读 + 长期缓存）
+/apk/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=86400

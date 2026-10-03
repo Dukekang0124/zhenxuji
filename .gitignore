@@ -1,0 +1,39 @@
+# 帧叙集-app —— 仓库级 .gitignore
+#
+# 边界：仓库里只放**源**。凡是「构建/同步/签名产物」一律不入库，
+# 否则 CI 里 `cap sync` 会把上一轮的产物又塞回 android/，出包体积和签名都跟着漂。
+
+# 构建产物（build:web 生成；CI 自己会跑一遍）
+www/
+
+# Capacitor 平台目录：CI 由 `capacitor add android` 每次重新生成
+# （本地那份是为了本机出包用，不入库）
+android/
+
+# 出包产物
+apk-dist/
+dist/
+
+# 依赖
+node_modules/
+
+# 本地签名配置：含 keystore 口令，绝不入库（CI 自己生成并固化 keystore）
+android/keystore.properties
+*.jks
+
+# 自测/探针临时产物（里面的日志、截图体积大且每次都变）
+_selftest/
+work/
+*.log
+
+# 本地工具链与个人信息
+.workbuddy/
+.idea/
+.vscode/
+
+# 主题生成物（packs.json 是配置源，生成器产物每次重建即可）
+theme/generated/
+
+# 环境变量 / 密钥
+.env
+.dev.vars
