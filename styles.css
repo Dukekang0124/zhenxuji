@@ -1331,6 +1331,104 @@ body.album-deco-off .album-texture,
 body.album-deco-off .album-tag--note,
 body.album-deco-off .album-tag--loc{display:none !important;}
 
+/* ==================== 导出落点 / 导出历史 / 访客（P0-Bug1 + P1） ==================== */
+.exdl__ok{margin:0 0 6px;color:var(--brand);font-size:15px;font-weight:600}
+.exdl__where{margin:0 0 8px;font-size:13.5px;color:var(--ink);word-break:break-all}
+.exdl__detail{margin:0;font-size:13px;color:var(--ink-2);line-height:1.7}
+
+.exh{
+  display:flex;gap:12px;align-items:center;min-width:0;
+  padding:10px;border:1px solid var(--line);border-radius:var(--r-md,12px);
+  background:var(--card);margin-bottom:8px;
+}
+.exh__thumb{
+  flex:none;width:44px;height:44px;border-radius:8px;
+  background:var(--paper) center/cover no-repeat;border:1px solid var(--line);
+}
+.exh__thumb--none{background:repeating-linear-gradient(45deg,var(--paper),var(--paper) 5px,var(--line) 5px,var(--line) 6px)}
+.exh__b{min-width:0;flex:1}
+.exh__t{font-size:14px;color:var(--ink);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exh__fn{font-size:12px;color:var(--ink-2);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all;margin-bottom:2px}
+.exh__m{font-size:11.5px;color:var(--ink-2)}
+
+.visitors{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.visitors__lb{font-size:12px;color:var(--ink-2);margin-bottom:8px}
+.visitors__row{display:flex;flex-wrap:wrap;gap:6px}
+.vchip{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:50%;overflow:hidden;
+  background:var(--paper);border:1px solid var(--line);
+}
+.vchip__a{font-size:12px;color:var(--ink-2);line-height:1}
+
+/* ==================== 素材配方卡（P0-Bug2：JSON 溢出修复） ====================
+   🔴 这段的布局纪律：纵向 flex + min-width:0 + flex-wrap:wrap。
+      原来的 `.row--between` 是横向排列且不换行，长文本必然溢出卡片 ——
+      那不是"溢出没藏住"，是**布局方向选错了**。所以这里换结构而不是加 overflow:hidden
+      （后者只是把症状藏起来，内容还是撑在框外，用户依然点不到、看不全）。
+      所有色值走 token，不硬编码主题色。 */
+/* 🔴 .rcards 必须 width:100%：column flex 的 stretch 只在子项 width:auto 时按交叉轴铺满，
+   一旦子项写了 min-width:0，auto 宽度会退回"按内容算" —— 超长配方名就把整张卡撑宽了。
+   （实测：不给这行，.rcard__name 的 scrollWidth 541 > clientWidth 292，整卡被顶出屏幕。） */
+.rcards{display:flex;flex-direction:column;gap:10px;margin:0 0 6px;width:100%}
+
+.rcard{
+  display:flex;flex-direction:column;align-items:stretch;gap:8px;
+  min-width:0;width:100%;box-sizing:border-box;   /* 关键：允许收缩，配合下面 wrap 换行 */
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:var(--r-md,12px);
+  background:var(--card);
+  cursor:pointer;
+  transition:border-color .18s ease,transform .18s ease;
+}
+.rcard:active{transform:scale(.994)}
+.rcard--open{border-color:var(--mint)}
+
+/* 🔴 min-width:0 要落在**每一层 flex 祖先**上，只给最外层 .rcard 加是不够的。
+   真跑抓到的：超长配方名 scrollWidth 541 > clientWidth 292 照样溢出。
+   原因 —— flex 子项的 min-width 默认是 auto（= 内容宽度），
+   所以 .rcard__name 拒绝收缩，text-overflow:ellipsis 根本不会触发。
+   正确写法：.rcard / .rcard__top 都 min-width:0，且名字自身也得 min-width:0。 */
+.rcard__top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;width:100%}
+.rcard__name{
+  flex:1 1 auto;min-width:0;                  /* 关键：允许收缩到内容宽以下 */
+  font-size:15px;font-weight:600;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.rcard__count,.rcard__tone{
+  flex:none;font-size:12px;color:var(--ink-2);
+  padding:1px 8px;border-radius:999px;
+  background:var(--paper);border:1px solid var(--line);
+}
+
+/* 参数标签：默认只露 4 个，多的一律换行收纳，从根上不可能横向溢出 */
+.rcard__tags{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.rtag{
+  font-size:12px;line-height:1.5;color:var(--ink);
+  padding:2px 9px;border-radius:999px;
+  background:var(--paper);
+  border:1px solid var(--line);
+  max-width:100%;
+  white-space:normal;word-break:break-word;   /* 长标签内部也能断，不会顶出卡片 */
+}
+.rtag--more{color:var(--ink-2);background:transparent;border-style:dashed}
+
+.rcard__toggle{
+  align-self:flex-start;font-size:12px;color:var(--mint);
+  border-bottom:1px solid currentColor;line-height:1.6;
+}
+
+/* 展开后的参数表：一行一个「键 / 中文标签 / 值」，不是原始 JSON 串 */
+.rcard__more{min-width:0}
+.rtable{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+.rtable td{padding:4px 0;border-bottom:1px dashed var(--line);vertical-align:top}
+.rtable__k{width:34%;color:var(--ink-2);font-family:ui-monospace,Menlo,Consolas,monospace;
+  word-break:break-all}                      /* 键名可能很长（老存档自定义键）*/
+.rtable__l{width:34%;color:var(--ink);padding-left:6px}
+.rtable__v{width:32%;color:var(--brand);text-align:right;padding-right:2px}
+.rcard__hint{margin:8px 0 0;font-size:12px;color:var(--ink-2);word-break:break-word}
+
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms !important;transition-duration:.001ms !important}
 }
