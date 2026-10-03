@@ -13,6 +13,8 @@ import { THEMES, normalizeTheme, themeName, tokens } from './theme.js';
 import { MODE_PREFS, MODE_LABEL } from './appearance.js';
 import { paramTags, summaryLine, PREVIEW_TAGS } from './recipes.js';
 import { KIND_LABEL, fmtWhen } from './exportdl.js';
+// AI 选片增量层（三级分级 / 相似组推荐 / 偏好记忆）
+import { pickLevel, bestOf, similarGroupsOf, prefsOf, levelBadge, reasonChips } from './picker.js';
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -125,6 +127,7 @@ export function pageAlbum({ state }) {
         <button class="btn btn--sm btn--ghost" data-act="pickAlbum">补充导入</button>
         <button class="btn btn--sm btn--ghost" data-act="regroup">重新聚类</button>
         <button class="btn btn--sm btn--ghost" data-act="openViewer">查看大图</button>
+        <button class="btn btn--sm" data-act="aiPickAll">AI 帮我选片</button>
       </div>`}
 
     ${state.groups.length ? groups : softEmpty('暂时还没分出组', '照片再多一些，或者回到新建页重新整理一次就会好')}`;
@@ -167,37 +170,113 @@ function groupCard(g) {
 
 /* ==================== 二级：AI 选片 ==================== */
 
+/**
+ * AI 选片（2026-10-03 升级为三级 + 相似组推荐 + 批量归档）
+ *
+ * 🔴 保持不破坏原有链路：
+ *   • pageEdit / pageCompose / doFinish 仍按 isTrash() 过滤，语义**未变**
+ *   • 「点照片切换 保留/废片」的交互沿用 togglePhoto，用户推翻 AI 的路径没变
+ *   • 本次只把**展示层**从二级换成三级，并新增相似组推荐与批量操作
+ */
 export function pagePick({ state, param }) {
   const g = state.groups.find((x) => x.id === param);
   if (!g) return `<h1 class="page-title">AI 选片</h1>${softEmpty('找不到这组照片了', '可能已经被整理走了，回新建页重新选一批吧')}`;
   const photos = g.photoIds.map((id) => state.photos.find((p) => p.id === id)).filter(Boolean);
-  const trash = photos.filter(isTrash);
-  const keep = photos.filter((p) => !isTrash(p));
-  const similar = photos.filter((p) => p.isSimilar);
+  const settings = state.settings || {};
+
+  // 三级分级（含组内"更差"提示）
+  const best = bestOf(photos);
+  const rows = photos.map((p) => ({ p, r: pickLevel(p, settings, { bestScore: best ? best.score : undefined }) }));
+  const bucket = (lv) => rows.filter((x) => x.r.level === lv);
+  const keep = bucket('keep');
+  const review = bucket('review');
+  const trash = bucket('trash');
+
+  // 相似组：每组推荐组内最优一张
+  const simGroups = similarGroupsOf(photos);
+  const inGroup = new Set();
+  for (const sg of simGroups) {
+    if (sg.ids.length > 1) sg.ids.forEach((i) => inGroup.add(i));
+  }
+  const simRows = rows.filter((x) => inGroup.has(x.p.id));
+
+  const card = (x) => `
+    <div class="pk-cell">
+      ${photoCard(x.p)}
+      <div class="pk-cell__m">
+        ${levelBadge(x.r.level)}
+        <span class="pk-score" title="审美打分（光影40%+构图30%+清晰度30%）">${x.r.score}</span>
+      </div>
+      ${reasonChips(x.r.reasons)}
+    </div>`;
+
+  const section = (title, list, hint) => (list.length ? `
+    <h2>${title} ${list.length} 张</h2>
+    ${hint ? `<p class="muted" style="margin:-6px 0 10px">${hint}</p>` : ''}
+    <div class="grid pk-grid">${list.map(card).join('')}</div>` : '');
+
+  // 偏好提示：说清 AI 因为你的纠正而改了什么（可解释性核心）
+  const prefs = prefsOf(settings);
+  const rescued = Object.entries(prefs.byReason)
+    .filter(([, v]) => (v.keep || 0) - (v.trash || 0) >= 2)
+    .map(([code]) => REASON_CN[code] || code);
 
   return `
-    <h1 class="page-title">AI 选片</h1>
-    <p class="page-sub">${esc(g.title)} · ${photos.length} 张 · ${esc(COPY.trustNote)}</p>
+  <h1 class="page-title">AI 选片</h1>
+  <p class="page-sub">${esc(g.title)} · ${photos.length} 张 · ${esc(COPY.trustNote)}</p>
 
-    ${similar.length ? `<div class="note">发现 ${similar.length} 张相似候选，已并排展示供你对比，<b>AI 不会替你淘汰</b></div>` : ''}
+  <div class="note">
+    AI 只做<b>标记</b>，<b>绝不删除你的原图</b>。你随时可以推翻它 —— 推翻了，AI 会记住你的口径。
+    ${rescued.length ? `<br>已记住：<b>${esc(rescued.join('、'))}</b> 这类你常救回来，以后不再单独判废。` : ''}
+  </div>
 
-    <h2>可用 ${keep.length} 张</h2>
-    <div class="grid">${keep.map(photoCard).join('')}</div>
+  ${simGroups.length ? `
+    <h2>相似连拍 ${simGroups.length} 组</h2>
+    <p class="muted" style="margin:-6px 0 10px">同场景高度相似的照片，AI 已各挑一张最优，其余可一键归档</p>
+    ${simGroups.map((sg) => {
+      const members = sg.ids.map((id) => rows.find((x) => x.p.id === id)).filter(Boolean);
+      const bestRow = members.find((x) => x.p.id === sg.bestId) || members[0];
+      const others = members.filter((x) => x.p.id !== sg.bestId);
+      return `
+      <div class="pk-sim">
+        <div class="pk-sim__h">${members.length} 张相似 · 推荐第 ${members.indexOf(bestRow) + 1} 张（${bestRow.r.score} 分）</div>
+        <div class="pk-sim__b">
+          <div class="pk-sim__best">
+            ${card(bestRow)}
+            <button class="btn btn--sm" data-act="archiveSimilar" data-id="${esc(g.id)}" data-ids="${esc(others.map((o) => o.p.id).join(','))}">归档其余 ${others.length} 张</button>
+          </div>
+          <div class="pk-sim__rest">${others.map((x) => `<div class="pk-sim__o">${card(x)}</div>`).join('')}</div>
+        </div>
+      </div>`;
+    }).join('')}` : ''}
 
+  ${simRows.length ? section('相似组里的照片', simRows) : ''}
+  ${section('推荐保留', keep, 'AI 认为这些可以直接用')}
+  ${section('待评估', review, '有轻微疑点，建议你扫一眼再决定')}
+
+  ${trash.length ? `
+    <!-- 🔴 默认**折叠**，这是信息层级决策不是偷懒：疑似废片是低频关注项，
+         铺开会在 36 张相册里糊掉满屏，把「推荐保留 / 待评估」这两个真正要看的区挤没。
+         保留与待评估在上方直接可见；废片折叠、标题带数量，想看再点开。 -->
     <div class="fold" id="foldTrash">
       <button class="fold__h" data-act="toggleFold" data-target="foldTrash">
-        <span>AI 建议不用 ${trash.length} 张（已折叠，未删除）</span><span>▾</span>
+        <span>疑似废片 ${trash.length} 张（已标记，未删除）</span><span>▾</span>
       </button>
       <div class="fold__b">
         <p class="muted" style="margin:0 0 10px">仅标记，不删除手机原图。点任意一张可恢复。</p>
-        <div class="grid">${trash.map(photoCard).join('')}</div>
+        <div class="grid pk-grid">${trash.map(card).join('')}</div>
+        ${trash.length > 1 ? `<button class="btn btn--sm btn--ghost" data-act="batchArchive" data-id="${esc(g.id)}">全部标记为废片（${trash.length} 张）</button>` : ''}
       </div>
-    </div>
+    </div>` : ''}
 
-    <div style="margin-top:18px">
-      <button class="btn btn--block" data-act="goEdit" data-id="${esc(g.id)}">下一步：批量修图</button>
-    </div>`;
+  <div style="margin-top:18px">
+    <button class="btn btn--block" data-act="goEdit" data-id="${esc(g.id)}">下一步：批量修图</button>
+  </div>`;
 }
+
+const REASON_CN = {
+  blur: '模糊', over: '过曝', under: '死黑', occlude: '遮挡', duplicate: '完全重复',
+};
 
 function isTrash(p) {
   if (p.userOverride === 'keep') return false;

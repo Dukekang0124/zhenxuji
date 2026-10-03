@@ -21,6 +21,7 @@ import { resolveMode, MODE_LABEL } from './appearance.js';
 import { checkUpdate, performUpdate, snooze, markUpdated, detectApk, readSnooze } from './update.js';
 import { pageViewer, mountViewer } from './viewer.js';   // 相册大图查看器（四主题，纯新增）
 import { makeRecord, pushRecord, canSaveToAlbum, KIND_LABEL, fmtWhen } from './exportdl.js';   // P0-Bug1 导出落点
+import { mountViewerPicker, recordOverride, pickLevel } from './picker.js';   // AI 选片增量层
 
 const view = () => document.getElementById('view');
 
@@ -68,7 +69,16 @@ function render() {
   for (const b of document.querySelectorAll('.tab')) {
     b.classList.toggle('tab--on', b.dataset.tab === (TABS.includes(page) ? page : 'create'));
   }
-  if (page === 'viewer') mountViewer(view());   // 查看器自带滑动/点选，渲染后挂行为
+  if (page === 'viewer') {
+    mountViewer(view());
+    // AI 选片扩展：只往 viewer 里**追加**一条标记栏，不改 viewer 组件本身。
+    // 传 getter 而非快照：override() 会整体替换 state.photos，闭包持快照会读旧数据。
+    const bar = mountViewerPicker(view(), () => store.get(), param) && view().querySelector('.album-viewer').__pickerBar;
+    if (bar) {
+      bar.__onMark = (id, act) => doMark(id, act);
+      bar.__onRevert = (id) => doRevert(id);
+    }
+  }
   paintToast();
 }
 
@@ -156,6 +166,71 @@ if (window.matchMedia) {
   else if (mq.addListener) mq.addListener(onSys);
 }
 
+/* ==================== AI 选片（增量层） ==================== */
+
+/**
+ * 用户在大图页标记「珍藏 / 废片」。
+ * 🔴 只写 userOverride 标记，**绝不删原图**；同时把这次纠正沉淀进偏好，
+ *    让 AI 后续对同类缺陷放宽判定（可解释、不学黑盒）。
+ */
+function doMark(id, act) {
+  const st = store.get();
+  const p = st.photos.find((x) => x.id === id);
+  if (!p) return;
+  store.actions.patchSettings(recordOverride(st.settings || {}, p, act));
+  store.actions.override(id, act);
+  store.toast(act === 'keep' ? '已珍藏 · AI 记住你的口径了' : '已标记废片 · 原图仍在相册');
+  // 🔴 刻意不调 render()：重建会把大图打回第 1 张、丢掉浏览位置。
+  //    标记栏自己 repaint；真正需要重排的是 pagePick，切页时自然会重渲染。
+}
+
+function doRevert(id) {
+  if (!id) return;
+  // override(id, null) 即清掉显式覆盖 → 回归纯 AI 判定。
+  // 偏好记录**保留**：那是"你的口径"，与这一次是否撤销无关。
+  store.actions.override(id, null);
+  store.toast('已交还 AI 判定');
+}
+
+/** 一键 AI 帮我选片：优先进"有疑似废片"的分组，否则第一组 */
+function aiPickAll() {
+  const st = store.get();
+  if (!st.groups.length) { store.toast('先导入照片再让我帮你选'); return; }
+  let target = st.groups[0];
+  for (const g of st.groups) {
+    const ps = (g.photoIds || []).map((id) => st.photos.find((p) => p.id === id)).filter(Boolean);
+    if (ps.some((p) => pickLevel(p, st.settings).level === 'trash')) { target = g; break; }
+  }
+  router.go('pick', target.id);
+}
+
+/**
+ * 批量把指定 id 列表标记为废片（只标记，不删）。
+ *
+ * 🔴 两条自纠（都是实测会出错的路径，不是洁癖）：
+ *  1) 尊重用户已有决定：已 userOverride==='keep' 的跳过。
+ *     相似组归档会把「组内非最优」整批打标，若用户手动珍藏过其中一张，
+ *     批量化会把人家的珍藏直接盖掉 —— 自己的产品自己都会踩。
+ *  2) 单次写盘：逐张 override 会 N 次 JSON.stringify 全量存档 + N 次 emit，
+ *     100 张就是 100 次同步序列化（主线程肉眼可见地卡）。
+ */
+function archiveIds(ids) {
+  const list = (ids || []).filter(Boolean);
+  if (!list.length) return 0;
+  const st = store.get();
+  const targets = list.filter((id) => {
+    const p = (st.photos || []).find((x) => x.id === id);
+    return p && p.userOverride !== 'keep';      // 珍藏过的绝不覆盖
+  });
+  if (!targets.length) return 0;
+  const set = new Set(targets);
+  // upsertPhotos：一次合并 + 一次 save + 一次 emit（不改 store.js，避免动公共面）
+  store.actions.upsertPhotos(
+    st.photos.filter((p) => set.has(p.id)).map((p) => ({ id: p.id, userOverride: 'trash' }))
+  );
+  return targets.length;
+}
+
 /* ==================== 扫描 ==================== */
 
 async function runScan(mode) {
@@ -241,6 +316,34 @@ document.addEventListener('click', async (e) => {
         const gid = el.dataset.id || '';
         const start = el.dataset.start || '';
         router.go('viewer', gid ? (start ? `${gid}:${start}` : gid) : '');
+        break;
+      }
+
+      /* ---- AI 选片（增量层） ---- */
+      case 'aiPickAll':
+        aiPickAll();
+        break;
+
+      case 'batchArchive': {
+        // 批量标记废片：只打标记，原图一张不删
+        const st = store.get();
+        const g = st.groups.find((x) => x.id === id);
+        if (!g) break;
+        const targets = (g.photoIds || [])
+          .map((pid) => st.photos.find((p) => p.id === pid))
+          .filter((p) => p && !p.userOverride && pickLevel(p, st.settings).level === 'trash')
+          .map((p) => p.id);
+        const n = archiveIds(targets);
+        store.toast(n ? `已标记 ${n} 张为废片 · 原图仍在相册` : '没有需要标记的废片');
+        render();
+        break;
+      }
+
+      case 'archiveSimilar': {
+        // 相似组：归档"除推荐那张之外"的其余照片
+        const n = archiveIds(String(el.dataset.ids || '').split(',').filter(Boolean));
+        store.toast(n ? `已归档其余 ${n} 张 · 原图仍在相册` : '没有可归档的');
+        render();
         break;
       }
 

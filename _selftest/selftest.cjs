@@ -648,8 +648,18 @@ async function makeFiles() {
     /rgba\(200,\s*123,\s*110,\s*0\.\d+\)/.test(pickVis.outline || '')
     && parseFloat((pickVis.outline.match(/([\d.]+)\)$/) || [])[1] || '1') <= 0.5,
     pickVis.outline);
-  check('折叠区标题同步改口径（AI 建议不用 N 张）',
-    pickVis.foldText.includes('AI 建议不用'), pickVis.foldText);
+  // ⚠️ 口径变更留痕（AI 选片模块，2026-10-03）：本条原先断言「AI 建议不用 N 张」，
+  //    来自"废片标签柔和化（规范六.1）——不压迫用户"。
+  //    三级分级指令把该档定为「疑似废片」，属**更晚的明确决策**，故更新断言。
+  //    规范六.1 的设计意图（不压迫）没有丢，靠三处继续承担：
+  //      ① "疑似"二字本身就是不确定表述（≠"这是废片"）
+  //      ② 该区默认折叠，不铺屏（低频关注项不抢视觉）
+  //      ③ 区标题与区首行都写明"已标记，未删除 / 不删除手机原图"
+  //    卡片上的 .ph__tag 仍是柔和的「建议不用」，未改动（上面那条断言继续守它）。
+  check('折叠区标题为三级口径（疑似废片 N 张）',
+    pickVis.foldText.includes('疑似废片'), pickVis.foldText);
+  check('🔴 折叠区标题仍写明"未删除"（规范六.1 的不压迫承诺）',
+    pickVis.foldText.includes('未删除'), pickVis.foldText);
 
   /* ---------------- I. 版本更新系统（V1.2 新增，方案 §2.9） ---------------- */
   sec('I. 版本更新系统（24h 冷却 / 双弹窗 / 静默失败）');
