@@ -287,7 +287,14 @@ jobs:
           T=${BUILD_TYPE}
           if [ "$T" = "debug" ]; then SRC=android/app/build/outputs/apk/debug/app-debug.apk; else SRC=android/app/build/outputs/apk/release/app-release.apk; fi
           mkdir -p dist
-          cp "$SRC" "dist/帧叙集-v${{ steps.ver.outputs.version }}-$T.apk"
+          # 🔴 文件名一律用 ASCII。实测（v0.6.0 与 v0.6.3 两代）：
+          #    非 ASCII 文件名（帧叙集-…）在 CI 工具链里会被吞掉中文，
+          #    变成 "-v0.6.x-release.apk"（开头一个连字符），既难看又难引用；
+          #    本机 Windows 实测同样会 mojibake（显示为 "?-v0.6.3-release.apk"）。
+          #    中文品牌名交给 Release 标题 / 页面展示，文件名保持 ASCII 稳定。
+          #    注意 v0.6.1 / v0.6.2 恰好没中招，属于运气（见 v0.6.0 同名问题），
+          #    不能依赖 —— 故此处按「永远 ASCII」处理，而非复现旧名。
+          cp "$SRC" "dist/zhenxuji-v${{ steps.ver.outputs.version }}-$T.apk"
           # 🔴 再存一份**固定文件名**，专供 App 内「检查更新」使用。
           #    version.json 里 update_url 若写成版本号文件名，每次发版都得手改配置；
           #    固定名 + GitHub Release 的 releases/latest/download/<name> 组合，
@@ -296,6 +303,15 @@ jobs:
           #    只对 release 包做，debug 包签名随机、覆盖安装会丢本地数据，不该被自动更新拉过去。
           if [ "$T" = "release" ]; then cp "$SRC" "dist/zhenxuji-latest.apk"; fi
           ls -lh dist
+          # 🔴 断言产物名确实是 ASCII，且没被工具链吞成 "-v0.6.x-…"（见上方注释）
+          for f in dist/*.apk; do
+            case "$(basename "$f")" in
+              -*) echo "::error::产物名以连字符开头，中文被工具链吞掉了：$f"; exit 1 ;;
+            esac
+            printf '%s' "$(basename "$f")" | LC_ALL=C grep -q '[^ -~]' && {
+              echo "::error::产物名含非 ASCII 字符，跨平台不可靠：$f"; exit 1; }
+          done
+          echo "产物名均为 ASCII ✓"
 
       # 不变量：APK 内网页版本必须等于发布版本（防"包是旧的"）
       - name: Verify APK contents
@@ -304,9 +320,28 @@ jobs:
           unzip -p dist/*.apk assets/public/index.html | grep -o "window.APP_VERSION = '$V'" || { echo "::error::APK 内 APP_VERSION != $V"; exit 1; }
           echo "APK 内资产版本 = $V ✓"
 
+      # 🔴 不变量：tag 名必须与包内版本一致。
+      #    2026-10-03 实测踩坑：index.html 还是 0.6.2 时打了 v0.6.3 的 tag，
+      #    CI **照样全绿**，Release 里出现「v0.6.3 的标题 + 0.6.2 的包」，
+      #    甚至 Release 正文自动写「对比 v0.6.2」——自相矛盾。
+      #    根因：所有版本闸门校验的都是「tag/包内部一致」，唯独没人校验
+      #    「tag 与 index.html 一致」，而 CI 又是被 tag 触发的 ——
+      #    等于整个链条自己证明自己。此处补上这唯一的外部锚点。
+      - name: Verify tag matches in-package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          V=${{ steps.ver.outputs.version }}
+          TAG=${GITHUB_REF#refs/tags/v}
+          if [ "$TAG" != "$V" ]; then
+            echo "::error title=tag-version-mismatch::tag 是 v$TAG，但包内版本是 $V"
+            echo "::error::请先把 index.html 的 APP_VERSION 与 version.json 同步升到 $TAG，再打 tag。"
+            exit 1
+          fi
+          echo "tag 与包内版本一致：v$TAG ✓"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: 帧叙集-v${{ steps.ver.outputs.version }}-${{ env.BUILD_TYPE }}
+          name: zhenxuji-v${{ steps.ver.outputs.version }}-${{ env.BUILD_TYPE }}
           path: dist/*.apk
           if-no-files-found: error
 
@@ -314,5 +349,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          # 中文品牌名放在 Release 标题（UTF-8，展示层可靠），不放进文件名
+          name: 帧叙集 v${{ steps.ver.outputs.version }}
           files: dist/*.apk
           generate_release_notes: true
