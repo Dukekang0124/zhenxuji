@@ -39,7 +39,15 @@ const initial = {
   scanCursor: null, // 增量扫描游标 { lastScanAt, count }
 
   // —— 运行态（不持久化）——
-  ui: { route: '', busy: null, toast: null, scan: null },
+  // 🔴 exportHistory / exportResult 是导出落点功能（P0-Bug1）的运行态：
+  //    历史里带 blobURL / dataURL 缩略图，**故意不落盘** —— 持久化会往 localStorage
+  //    塞 base64 图片（配额一下就爆），且缩略图 blobURL 跨会话本来就失效。
+  //    代价是「导出历史」重启后清空：如实如此，不假装它能长期留存。
+  //    真要长期留（只存文件名/时间/类型，不存图），那是独立需求。
+  ui: {
+    route: '', busy: null, toast: null, scan: null,
+    exportResult: null, exportHistory: [],
+  },
 };
 
 let state = { ...initial };

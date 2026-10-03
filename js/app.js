@@ -20,6 +20,7 @@ import { applyTheme, normalizeTheme, themeName } from './theme.js';
 import { resolveMode, MODE_LABEL } from './appearance.js';
 import { checkUpdate, performUpdate, snooze, markUpdated, detectApk, readSnooze } from './update.js';
 import { pageViewer, mountViewer } from './viewer.js';   // 相册大图查看器（四主题，纯新增）
+import { makeRecord, pushRecord, canSaveToAlbum, KIND_LABEL, fmtWhen } from './exportdl.js';   // P0-Bug1 导出落点
 
 const view = () => document.getElementById('view');
 
@@ -37,6 +38,7 @@ const PAGES = {
   settings: P.pageSettings,
   changelog: P.pageChangelog,   // 方案 §2.9.5 更新日志页
   viewer: pageViewer,           // 相册大图查看器（四主题）
+  exphistory: P.pageExportHistory,   // P0-Bug1 导出历史（独立路由，不占底部导航）
 };
 
 const TABS = ['create', 'gallery', 'recipes', 'settings'];
@@ -61,7 +63,7 @@ function render() {
   // .view 上跑着主题化进场动效（transform），会给 position:fixed 的弹窗造出包含块，
   // 动画没跑完时遮罩会只盖住 main 而露着顶栏/底栏。原因与取舍详见 index.html 的注释。
   const modalRoot = document.getElementById('modalRoot');
-  if (modalRoot) modalRoot.innerHTML = P.renderUpdateModal(state);
+  if (modalRoot) modalRoot.innerHTML = P.renderUpdateModal(state) + P.renderExportModal(state);
 
   for (const b of document.querySelectorAll('.tab')) {
     b.classList.toggle('tab--on', b.dataset.tab === (TABS.includes(page) ? page : 'create'));
@@ -89,6 +91,13 @@ store.subscribe(paintToast);
 //    （顺带 render 了一次）才碰巧显示出来。于是「已是最新」「网络异常」这两个
 //    **不弹窗**的分支，点了按钮页面一动不动（用户视角就是"还是没反应"，跟修复前一样）。
 //    所以 key 必须把 updateNote 也纳进来。
+//
+// 🔴 P0-Bug1 补记：key 还必须带上 **exportResult**。
+//    这条订阅是"UI 弹窗变化 → 重绘整页"的唯一通路，若 key 不含它，
+//    `setUI({exportResult})` 后 emit 到了这里却被 `if (k === lastModalKey) return`
+//    拦掉 —— 现象是"导出成功但弹窗根本没出现"，而下载其实已经发生了。
+//    （第一版自测就是死在这儿：downloads 有记录、弹窗 null。）
+//    教训：新增任何走 modalRoot 的弹窗，都必须在这里登记 key，否则静默不显示。
 let lastModalKey = '';
 store.subscribe((s) => {
   const ui = s.ui || {};
@@ -98,8 +107,10 @@ store.subscribe((s) => {
   //    界面还停在可选弹窗上。证据图直接受害 —— update-modal.png 与 update-force.png
   //    拍出来字节完全相同（md5 一致），等于"强制更新"那张照片是假的。
   //    （产品上这条路径很少走到，但证据假了比功能少更危险：它让人以为验过了。）
+  const ex = ui.exportResult;
   const k = (m ? `${m.isForce ? 'force' : 'optional'}:${(m.config && m.config.latestVersion) || ''}` : 'off')
-    + '|' + String(ui.updateNote || '');
+    + '|' + String(ui.updateNote || '')
+    + '|' + (ex ? `${ex.kind}:${ex.filename}:${ex.at}` : 'off');   // 导出落点弹窗
   if (k === lastModalKey) return;
   lastModalKey = k;
   render();
@@ -283,6 +294,41 @@ document.addEventListener('click', async (e) => {
         // 点遮罩不关闭（强制更新尤其不能点错就跳过）
         break;
 
+      /* ---- P0-Bug1：导出落点弹窗 + 导出历史 ---- */
+      case 'closeExport':
+        // 点遮罩也能关：这是提示型弹窗（非强制），困住用户是错的
+        store.setUI({ exportResult: null });
+        break;
+
+      case 'copyExportName': {
+        const name = el.dataset.name || '';
+        // clipboard 在非 https / 无权限时会抛，必须兜住 —— 不能给用户一个点了没反应的按钮
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(name);
+            store.toast('文件名已复制');
+          } else {
+            throw new Error('no clipboard api');
+          }
+        } catch {
+          // 兜底：弹一个可手选的输入框，用户自己长按复制
+          const box = document.createElement('input');
+          box.value = name;
+          box.setAttribute('readonly', '');
+          box.style.cssText = 'position:fixed;left:12px;right:12px;top:40%;z-index:99;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:14px';
+          document.body.appendChild(box);
+          box.select();
+          store.toast('请长按选中复制');
+          setTimeout(() => box.remove(), 6000);
+        }
+        break;
+      }
+
+      case 'goExportHistory':
+        store.setUI({ exportResult: null });
+        router.go('exphistory');
+        break;
+
       case 'goSettings':
         router.go('settings');
         break;
@@ -327,6 +373,21 @@ document.addEventListener('click', async (e) => {
       case 'toggleFold':
         document.getElementById(el.dataset.target)?.classList.toggle('fold--open');
         break;
+
+      /* ---- 配方卡展开参数（P0-Bug2） ----
+         🔴 刻意**不调 render()**：配方页是纯展示，重渲染会把用户刚展开的卡片又收回去
+            （真实体验：点「查看全部参数」→ 一闪又折回去，像是没点上）。
+            只切 DOM，状态留在节点上，切页回来会重置 —— 这才是对的行为。 */
+      case 'toggleRecipe': {
+        const more = el.querySelector('.rcard__more');
+        const tg = el.querySelector('.rcard__toggle');
+        if (!more) break;
+        const open = more.hasAttribute('hidden');
+        if (open) more.removeAttribute('hidden'); else more.setAttribute('hidden', '');
+        if (tg) tg.textContent = open ? '收起参数' : '查看全部参数';
+        el.classList.toggle('rcard--open', open);
+        break;
+      }
 
       case 'goEdit': router.go('edit', id); break;
       case 'goCompose': router.go('compose', id); break;
@@ -490,25 +551,47 @@ async function doExport(storyId, kind) {
   const photos = (s.photoIds || []).map((i) => st.photos.find((p) => p.id === i)).filter(Boolean);
   if (!photos.length) { store.toast('没有照片可导出'); return; }
 
+  // 🔴 下载能力前置校验（P0-Bug1 方案里的"权限前置校验"）：
+  //    真跑确认本项目走浏览器下载通道，**不存在相册写入权限**这回事，
+  //    所以这里能校验的是"这个环境能不能触发下载"。
+  //    一旦将来装了 @capacitor/photos，这里换成 canSaveToAlbum() + 真实授权询问。
+  if (!canSaveToAlbum()) {
+    // 不阻断 —— 浏览器下载是可行的，只是没有"存相册"这个更顺手的选项。
+    // 用 setUI 记一条，供导出弹窗里如实说明。
+  }
+
   store.toast('正在生成…');
   try {
+    let rec;
     if (kind === 'grid') {
       const c = await makeNineGrid(photos);
-      await downloadCanvas(c, `帧叙集-九宫格-${s.text?.cover || storyId}.jpg`);
-      store.toast('九宫格已导出');
+      const fn = `帧叙集-九宫格-${s.text?.cover || storyId}.jpg`;
+      await downloadCanvas(c, fn);
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(photos[0]), storyTitle: s.text?.cover });
     } else if (kind === 'long') {
       const c = await makeLongImage(photos, s);
-      await downloadCanvas(c, `帧叙集-长图-${s.text?.cover || storyId}.jpg`);
-      store.toast('竖版长图已导出');
+      const fn = `帧叙集-长图-${s.text?.cover || storyId}.jpg`;
+      await downloadCanvas(c, fn);
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(photos[0]), storyTitle: s.text?.cover });
     } else {
       const html = buildShareHTML(s, photos, s.templateId);
-      downloadText(html, `帧叙集-${s.text?.cover || storyId}.html`);
-      store.toast('分享网页已导出');
+      const fn = `帧叙集-${s.text?.cover || storyId}.html`;
+      downloadText(html, fn);
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(photos[0]), storyTitle: s.text?.cover });
     }
+    // 🔴 toast → 模态弹窗（P0-Bug1 核心）：toast 一闪就没，路径信息留不住。
+    store.setUI({ exportResult: rec, exportHistory: pushRecord(store.get().ui.exportHistory, rec) });
   } catch (e) {
     console.error('[export]', e);
     store.toast('导出失败');
   }
+}
+
+/** 导出历史缩略图：取第一张可用缩略图（原图优先，都没有就空） */
+function thumbOf(p) {
+  if (!p) return '';
+  if (p._file) { try { return URL.createObjectURL(p._file); } catch { return ''; } }
+  return p.thumbUrl || '';
 }
 
 /* ==================== 版本更新 ==================== */

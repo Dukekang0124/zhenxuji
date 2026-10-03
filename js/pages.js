@@ -11,6 +11,8 @@ import { SCENE_LABEL } from './cv.js';
 import { dateRangeText } from './ai.js';
 import { THEMES, normalizeTheme, themeName, tokens } from './theme.js';
 import { MODE_PREFS, MODE_LABEL } from './appearance.js';
+import { paramTags, summaryLine, PREVIEW_TAGS } from './recipes.js';
+import { KIND_LABEL, fmtWhen } from './exportdl.js';
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -345,7 +347,18 @@ export function pageShare({ state, param }) {
     <div class="card">
       <h2 style="margin-top:0">H5 轻分享</h2>
       <button class="btn btn--sm btn--mint" data-act="expH5" data-id="${esc(s.id)}">生成分享网页</button>
-      <p class="muted" style="margin:10px 0 0">导出为本地 HTML，对方无需下载 APP 即可查看</p>
+      <p class="muted" style="margin:10px 0 0">
+        导出为本地 HTML 文件：<b>微信发给好友即可打开</b>，对方不用下载 APP。
+        导出后文件在浏览器下载列表里。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">导出历史</h2>
+      <p class="muted" style="margin:0 0 10px">找不到刚才导出的文件？这里留了每一条的文件名与去向，可随时回看。</p>
+      <button class="btn btn--sm btn--ghost" data-act="goExportHistory">
+        查看导出历史${(state.ui?.exportHistory || []).length ? `（${state.ui.exportHistory.length}）` : ''}
+      </button>
     </div>
 
     <div class="card">
@@ -355,10 +368,33 @@ export function pageShare({ state, param }) {
         <span class="muted">点赞 ${s.stats?.likes || 0}</span>
         <span class="muted">留言 ${s.stats?.comments || 0}</span>
       </div>
+      ${renderVisitors(s)}
     </div>
 
     <div style="margin-top:18px">
-      <button class="btn btn--block btn--ghost" data-act="goGallery">回到作品集</button>
+      <button class="btn btn--block btn--ghost" data-act="goGallery">返回作品集</button>
+    </div>`;
+}
+
+/**
+ * 访客头像预览（P1）。
+ *
+ * 🔴 隐私红线（康哥明确要求 + 禁止项）：**只渲染本地已有的访客名，不做任何上传**。
+ *    访客数据存在 story.visitors 里，纯本地；这里只画小圆点 + 首字，
+ *    不存头像图片二进制（那会让存档体积暴涨，且属于"上传原图"的红线区）。
+ */
+function renderVisitors(s) {
+  const vs = Array.isArray(s.visitors) ? s.visitors.slice(0, 8) : [];
+  if (!vs.length) return '';
+  return `
+    <div class="visitors">
+      <div class="visitors__lb">${vs.length} 位访客（仅本地记录）</div>
+      <div class="visitors__row">
+        ${vs.map((v) => `
+          <span class="vchip" title="${esc(v.name || '')}${v.at ? ' · ' + fmtWhen(v.at) : ''}">
+            <span class="vchip__a">${esc((v.name || '?').slice(0, 1))}</span>
+          </span>`).join('')}
+      </div>
     </div>`;
 }
 
@@ -477,6 +513,47 @@ function lastYearToday(stories) {
   }) || null;
 }
 
+/**
+ * 配方卡（单张）。
+ *
+ * 🔴 P0-Bug2 修复要点（原来这里直接 `JSON.stringify(r.params)` 塞进 span，
+ *    配 `.row--between` 不换行 → 长串横向溢出、观感像乱码）：
+ *   ① 主界面**一个字都不给原始 JSON** —— 只给人话标签（亮度6｜柔化0.3…）
+ *   ② 超过 PREVIEW_TAGS 个标签自动折叠 + 「查看全部参数」展开
+ *   ③ 容器换成 `.rcard`（纵向 flex + min-width:0 + 换行），
+ *      从根上断掉横向溢出，而不是靠 overflow:hidden 遮住症状
+ *   ④ 原始 JSON 只在展开后的参数表里以「键 + 中文标签 + 值」出现，
+ *      不是原始串 —— 用户要抄备份可以照抄，但也看得懂
+ */
+function recipeCard(r, kind) {
+  const tags = paramTags(r.params);
+  const shown = tags.slice(0, PREVIEW_TAGS);
+  const rest = tags.slice(PREVIEW_TAGS);
+  const isTpl = kind === 'template';
+  return `
+    <div class="rcard" data-act="toggleRecipe" data-id="${esc(r.id)}" data-kind="${kind}">
+      <div class="rcard__top">
+        <span class="rcard__name">${esc(r.name)}</span>
+        ${isTpl
+          ? `<span class="rcard__tone">${esc(r.tone || '简约')}</span>`
+          : `<span class="rcard__count">${tags.length} 项</span>`}
+      </div>
+      ${isTpl ? '' : `
+        <div class="rcard__tags">
+          ${shown.map((t) => `<span class="rtag" title="${esc(t.tip)}">${esc(t.label)}${esc(t.text)}</span>`).join('')}
+          ${rest.length ? `<span class="rtag rtag--more">+${rest.length}</span>` : ''}
+        </div>
+        <div class="rcard__more" hidden>
+          <table class="rtable">
+            ${tags.map((t) => `<tr><td class="rtable__k">${esc(t.key)}</td><td class="rtable__l">${esc(t.label)}</td><td class="rtable__v">${esc(t.text)}</td></tr>`).join('')}
+          </table>
+          <p class="rcard__hint">${esc(summaryLine(r.params))}</p>
+        </div>
+        ${rest.length ? `<span class="rcard__toggle">查看全部参数</span>` : ''}
+      `}
+    </div>`;
+}
+
 /* ==================== 一级：素材配方 ==================== */
 
 export function pageRecipes({ state }) {
@@ -487,17 +564,12 @@ export function pageRecipes({ state }) {
     <p class="page-sub">个人美颜配方与手记排版模板，可绑定成套审美风格</p>
 
     <h2>美颜配方 ${beauty.length}</h2>
-    ${beauty.length ? beauty.map((r) => `
-      <div class="card card--tight row row--between">
-        <span>${esc(r.name)}</span>
-        <span class="muted">${esc(JSON.stringify(r.params || {}))}</span>
-      </div>`).join('') : softEmpty('还没有保存配方', '修图的时候调好效果，点「存为我的配方」就会出现在这里')}
+    ${beauty.length ? `<div class="rcards">${beauty.map((r) => recipeCard(r, 'beauty')).join('')}</div>`
+      : softEmpty('还没有保存配方', '修图的时候调好效果，点「存为我的配方」就会出现在这里')}
 
     <h2>排版模板 ${tpl.length}</h2>
-    ${tpl.length ? tpl.map((r) => `
-      <div class="card card--tight row row--between">
-        <span>${esc(r.name)}</span><span class="muted">${esc(r.tone || '简约')}</span>
-      </div>`).join('') : softEmpty('还没有版式模板', '内置的简约版式已经够用啦，这里可以存你自己喜欢的搭配')}`;
+    ${tpl.length ? `<div class="rcards">${tpl.map((r) => recipeCard(r, 'template')).join('')}</div>`
+      : softEmpty('暂无自定义版式模板', '内置的简约版式已经够用啦，这里可以存你自己喜欢的搭配')}`;
 }
 
 /* ==================== 二级：外观主题（V1.5） ==================== */
@@ -725,6 +797,62 @@ export function renderUpdateModal(state) {
                <button class="btn btn--block btn--text" data-act="snoozeUpdate">稍后提醒</button>`}
         </div>
       </div>
+    </div>`;
+}
+
+/* ==================== 导出落点弹窗 + 导出历史（P0-Bug1） ==================== */
+
+/**
+ * 导出完成弹窗。
+ *
+ * 🔴 为什么要模态弹窗而不是 toast（这是本轮 P0 的核心）：
+ *    toast 一闪就没，用户还没看清"文件在哪"就没了 → 现象就是"导出了但找不到"。
+ *    康哥方案里的原始设想是"保存到相册文件夹 + 拉起系统相册定位"，
+ *    但**当前项目未装任何 Capacitor 官方插件**（android/ 下无 Filesystem/Photos），
+ *    浏览器也不允许网页自行写入相册 —— 那套能力现在拿不到。
+ *    所以这里改成：**如实说明这个环境真实发生了什么 + 给能用的补救动作**，
+ *    宁可文案朴素，也不谎称"已在相册"（骗一次，用户就再也不信了）。
+ */
+export function renderExportModal(state) {
+  const r = state.ui && state.ui.exportResult;
+  if (!r) return '';
+  const w = r.where || {};
+  return `
+    <div class="umask" data-act="closeExport">
+      <div class="umodal" role="dialog" aria-modal="true" data-stop="1">
+        <div class="umodal__t">${esc(KIND_LABEL[r.kind] || '导出')}完成</div>
+        <div class="umodal__d">
+          <p class="exdl__ok">${esc(w.ok || '已导出')}</p>
+          <p class="exdl__where">${esc(w.where || '')}</p>
+          <p class="exdl__detail">${esc(w.detail || '')}</p>
+        </div>
+        <div class="umodal__acts">
+          <button class="btn btn--block" data-act="closeExport">知道了</button>
+          <button class="btn btn--block btn--text" data-act="copyExportName" data-name="${esc(r.filename)}">复制文件名</button>
+          <button class="btn btn--block btn--text" data-act="goExportHistory">查看导出历史</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/** 导出历史页入口挂在作品分享页顶部；本页为独立路由（不改底部导航） */
+export function pageExportHistory({ state }) {
+  const list = (state.ui && state.ui.exportHistory) || [];
+  const card = (r) => `
+    <div class="exh">
+      ${r.thumb ? `<div class="exh__thumb" style="background-image:url('${esc(r.thumb)}')"></div>` : '<div class="exh__thumb exh__thumb--none"></div>'}
+      <div class="exh__b">
+        <div class="exh__t">${esc(KIND_LABEL[r.kind] || '导出')} · ${esc(r.storyTitle || '未命名')}</div>
+        <div class="exh__fn">${esc(r.filename)}</div>
+        <div class="exh__m">${esc(fmtWhen(r.at))} · ${esc((r.where && r.where.ok) || '')}</div>
+      </div>
+    </div>`;
+  return `
+    <h1 class="page-title">导出历史</h1>
+    <p class="page-sub">共 ${list.length} 条。导出只生成新文件，不会删除或改动你的原图</p>
+    ${list.length ? list.map(card).join('') : softEmpty('还没有导出记录', '在作品分享页导出九宫格 / 长图 / 网页后，这里会留下记录，随时回看文件名与去向')}
+    <div style="margin-top:18px">
+      <button class="btn btn--block btn--ghost" data-act="goGallery">返回作品集</button>
     </div>`;
 }
 
