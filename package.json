@@ -14,6 +14,9 @@
     "gen:theme": "node scripts/gen-theme.mjs",
     "check:theme": "node scripts/check-theme-contrast.mjs && node scripts/verify-gen-theme.mjs",
     "check:texture": "node scripts/check-texture-render.cjs",
+    "check:worker": "node scripts/check-worker-env.mjs",
+    "check:android": "node scripts/check-android-config.mjs",
+    "bless:android": "node scripts/check-android-config.mjs --bless",
     "tune:contrast": "node scripts/tune-contrast-headroom.mjs",
     "changelog": "node scripts/gen-changelog.mjs"
   },

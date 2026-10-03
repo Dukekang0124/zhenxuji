@@ -1,0 +1,69 @@
+{
+  "_what": "帧叙集 Android 构建配置基准 —— 用于 CI/本地一致性闸门",
+  "_why": "方案 A 的核心前提是 CI 与本地跑同一份构建配置；本文件把该前提变成可校验的事实。",
+  "_howto": "改过任何受管控配置后，必须显式跑 `npm run bless:android` 重建基准，并连同代码一起提交评审。普通构建路径不会自动重建（否则闸门退化成自我证明）。",
+  "_note": "app/build.gradle 的 versionCode/versionName 已被抹平为 <STAMPED>，因为 CI 会按 tag 合法改写它们；其余每一个字节都受保护。",
+  "generated_at": "2026-10-03T08:40:15.527Z",
+  "files": [
+    {
+      "path": "android/app/build.gradle",
+      "why": "签名配置 / v2+v3 签名 / R8 排除 WebView 桥接 / versionCode·versionName 宿主",
+      "sha256": "a092f275d833cf48885edbd5f8e46717b0e2a6127d07f6416ccea56d288ede04",
+      "lines": 111
+    },
+    {
+      "path": "android/build.gradle",
+      "why": "顶层 AGP 版本与仓库源",
+      "sha256": "46ade7db7afeb8049ccea59fce83095dca736ceb8c9acd79cc944e988c3357d9",
+      "lines": 30
+    },
+    {
+      "path": "android/settings.gradle",
+      "why": "模块包含关系（含 capacitor-cordova-android-plugins，漏了会构建失败）",
+      "sha256": "6ce098d15ebd69b44c4ecd786bca1bdc366340d2459b2af4d7bb0ab317aa9669",
+      "lines": 5
+    },
+    {
+      "path": "android/variables.gradle",
+      "why": "Capacitor 各版本变量（minSdk/targetSdk/compileSdk）",
+      "sha256": "83d502c9ed8fcf1dd4791482067abeedbebae49fafe9cd14a8a1f5891deb0d88",
+      "lines": 16
+    },
+    {
+      "path": "android/gradle.properties",
+      "why": "JVM 参数 / AndroidX 开关",
+      "sha256": "43c3b779672efa21f16770b457e9ff064c3191ab81f0dec611e387b275b47fad",
+      "lines": 31
+    },
+    {
+      "path": "android/app/proguard-rules.pro",
+      "why": "R8 保留规则（WebView JS 桥接类靠它不被混淆）",
+      "sha256": "1cf8c57e8f79c250b0af9c1a5a4edad71a5c348a79ab70243b6bae086c150ad2",
+      "lines": 22
+    },
+    {
+      "path": "android/app/src/main/AndroidManifest.xml",
+      "why": "相册两级权限 / INTERNET / 网络状态权限",
+      "sha256": "3389dc7dcc7569497574b01c05a9c0b8fbc9148f6444cc570dd367c5ac795210",
+      "lines": 55
+    },
+    {
+      "path": "android/app/capacitor.build.gradle",
+      "why": "Java 21 兼容级别 + apply cordova.variables.gradle",
+      "sha256": "7051cadfdbc532197d2cfd4f8a11684d81367f23cf7952e5a208f7b6aa0833e0",
+      "lines": 20
+    },
+    {
+      "path": "android/capacitor-cordova-android-plugins/cordova.variables.gradle",
+      "why": "cordova 插件扩展点（被 capacitor.build.gradle 第 10 行引用）",
+      "sha256": "b13104b34f7738abceec358ae8226ba5e64855e97babde54a115880e9b9bd47b",
+      "lines": 7
+    },
+    {
+      "path": "android/capacitor-cordova-android-plugins/build.gradle",
+      "why": "cordova 插件子工程定义",
+      "sha256": "28e3fa281f4d1e388bf98abc7f5bb31e672516e385c165c719d201ed54b8236e",
+      "lines": 59
+    }
+  ]
+}

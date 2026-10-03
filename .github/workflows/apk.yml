@@ -33,6 +33,27 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      # 🔴 测试矩阵前置闸门（文档 P0：自动化测试不过不放行构建）。
+      #    放在构建之前 —— 任何逻辑/契约/环境兼容缺陷都应在「还没开始打包」时
+      #    被拦下，而不是等 1 分多钟构建完才发现。CI 无模型 key，verify-llm
+      #    只跑纯逻辑段（网络段自动跳过并标注），这恰好是可在 CI 跑的部分。
+
+      # LLM 路由：三层断言 + A/B 鉴别力（逻辑段，无需真 key）
+      - name: Test · LLM 路由 (verify-llm.js)
+        run: node worker/verify-llm.js
+
+      # Worker 运行环境兼容：裸 process 访问静态扫描（不兼容会线上 500）
+      - name: Test · Worker 环境兼容 (check-worker-env)
+        run: node scripts/check-worker-env.mjs
+
+      # Android 构建配置漂移：CI 与本地必须同构（方案 A 的前提）
+      - name: Test · Android 配置一致性 (check-android-config)
+        run: node scripts/check-android-config.mjs
+
+      # 主题生成 & 对比度闸门（防"改主题配置却没重新生成 CSS"）
+      - name: Test · 主题生成与对比度
+        run: npm run check:theme
+
       - name: Build web assets into www/
         run: npm run build:web
 
@@ -319,6 +340,49 @@ jobs:
           V=${{ steps.ver.outputs.version }}
           unzip -p dist/*.apk assets/public/index.html | grep -o "window.APP_VERSION = '$V'" || { echo "::error::APK 内 APP_VERSION != $V"; exit 1; }
           echo "APK 内资产版本 = $V ✓"
+
+      # 🔴 不变量：APK 指纹 + 签名证书锚点。
+      #    文档 P2-3 要求每次构建输出 MD5/SHA256 并与历史基准对比。
+      #    最该防的是「签名证书不一致」—— 一旦用了错 keystore，
+      #    已装旧包会因证书不同**无法覆盖安装**，且用户无感知。
+      #    故以「签名证书 SHA-256」为硬锚点（入库基线 signing.lock），
+      #    MD5/SHA256 仅作为构建日志输出供人工追溯。
+      #    证书指纹**只认 apksigner**（已在 Android SDK 里，CI 必有）；
+      #    早期试过 unzip+META-INF/*.RSA+openssl 路线，但 v2/v3 签名块里
+      #    证书文件名无法用 glob 稳定取到 → openssl 路线放弃，apksigner 是权威源。
+      - name: Verify APK fingerprint & signing cert
+        run: |
+          set +e
+          APK=$(ls dist/*.apk | head -1)
+          echo "=== APK 指纹 ==="
+          md5sum "$APK" | sed 's/^/  MD5:   /'
+          sha256sum "$APK" | sed 's/^/  SHA256: /'
+          BT=$(ls "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" | sort -r | head -1)
+          APKSIGNER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools/$BT/apksigner"
+          echo "签名方案（apksigner）："
+          JAVA_HOME=$JAVA_HOME "$APKSIGNER" verify --print-certs -v "$APK" 2>/dev/null \
+            | grep -E "Verified using v[1234]|Signer #1 certificate SHA-256" | sed 's/^/  /'
+          # 证书指纹：apksigner 输出无冒号的 64 位 hex，补成冒号分隔
+          RAW=$(JAVA_HOME=$JAVA_HOME "$APKSIGNER" verify --print-certs -v "$APK" 2>/dev/null \
+            | grep -oE "Signer #1 certificate SHA-256 digest: [0-9a-f]+" | grep -oiE '[0-9a-f]{64}' | head -1)
+          if [ -z "$RAW" ]; then
+            echo "::error title=no-cert-fingerprint::未能从 APK 提取签名证书指纹（APK 可能未正确签名）"; exit 1
+          fi
+          CERT_FP=$(echo "$RAW" | sed 's/.\{2\}/&:/g; s/:$//')
+          echo "证书 SHA-256: ${CERT_FP}"
+          BASE=$(cat android/signing.lock 2>/dev/null)
+          if [ -z "$BASE" ]; then
+            echo "::warning title=no-signing-baseline::android/signing.lock 不存在，跳过证书比对（首次请写入基线）"
+          elif [ "$CERT_FP" != "$BASE" ]; then
+            echo "::error title=signing-cert-mismatch::签名证书指纹与基线不一致！"
+            echo "::error::  基线 ：$BASE"
+            echo "::error::  当前 ：$CERT_FP"
+            echo "::error::用了错误的 keystore —— 已装旧包将无法覆盖安装。请核对 KEYSTORE_B64 / KEYSTORE_PASSWORD / KEY_ALIAS。"
+            exit 1
+          else
+            echo "签名证书与基线一致 ✓"
+          fi
+          set -e
 
       # 🔴 不变量：tag 名必须与包内版本一致。
       #    2026-10-03 实测踩坑：index.html 还是 0.6.2 时打了 v0.6.3 的 tag，

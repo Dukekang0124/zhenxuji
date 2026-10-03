@@ -1,0 +1,16 @@
+# 帧叙集 · 签名证书指纹基线（signing lock）
+#
+# 用途：CI 每构建一次 APK，就把签名证书的 SHA-256 与这一行比对。
+#       不一致 = 用了错误的 keystore = 已装旧包**无法覆盖安装**（无感知故障）。
+#
+# 🔴 这一行是「方案 A 全绿」那次实测出来的真值（apksigner verify）：
+#    v2 scheme: true / v3 scheme: true / v1 scheme: false
+#    证书 SHA-256 9626e01fb8ddf9a380cf0dd891ccb49b05087011b83c6a6439af4167851aaf17
+#
+# 若未来合法轮换 keystore（你已决定这么做），请：
+#   1. 本地用新 keystore 出包并真机测覆盖安装
+#   2. 把新证书的 SHA-256 覆盖写进本文件
+#   3. 连同代码一起提交，并在 PR 说明「已轮换签名密钥」
+#
+# 格式：仅一个冒号分隔的 64 位十六进制。
+9626e01fb8ddf9a380cf0dd891ccb49b05087011b83c6a6439af4167851aaf17
