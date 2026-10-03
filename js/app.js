@@ -21,6 +21,8 @@ import { resolveMode, MODE_LABEL } from './appearance.js';
 import { checkUpdate, performUpdate, snooze, markUpdated, detectApk, readSnooze } from './update.js';
 import { pageViewer, mountViewer } from './viewer.js';   // 相册大图查看器（四主题，纯新增）
 import { makeRecord, pushRecord, canSaveToAlbum, KIND_LABEL, fmtWhen } from './exportdl.js';   // P0-Bug1 导出落点
+import { applyRecipeToPhoto, makeBundle, toExportPhotos, downscaleToDataURL } from './enhance.js';   // P1 真实调色
+import { clampParams, autoName } from './recipes.js';   // 配方参数安全区（滑杆与存配方共用）
 import { mountViewerPicker, recordOverride, pickLevel } from './picker.js';   // AI 选片增量层
 
 const view = () => document.getElementById('view');
@@ -38,6 +40,7 @@ const PAGES = {
   theme: P.pageTheme,            // V1.5 外观主题（方案 §5.4）
   settings: P.pageSettings,
   changelog: P.pageChangelog,   // 方案 §2.9.5 更新日志页
+  help: P.pageHelp,               // 完整链路教程 + 能力边界（从设置页进，不占底部导航）
   viewer: pageViewer,           // 相册大图查看器（四主题）
   exphistory: P.pageExportHistory,   // P0-Bug1 导出历史（独立路由，不占底部导航）
 };
@@ -293,6 +296,20 @@ function scanFilesController() {
 
 /* ==================== 事件委托 ==================== */
 
+/**
+ * 滑杆实时回显：拖动时立刻更新右边的数字。
+ *
+ * 🔴 为什么挂在 document 上而不是渲染时逐个绑：页面每次 store 变化都会整块重渲染
+ *    （render() 重建 #view），绑在元素上的监听器随节点一起被丢掉。
+ *    委托到 document 才活得过重渲染 —— 这与 data-act 委托是同一个道理。
+ */
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!el || !el.classList || !el.classList.contains('sld__r')) return;
+  const out = document.querySelector(`.sld__v[data-out="${el.dataset.p}"]`);
+  if (out) out.textContent = String(Math.round(Number(el.value) * 10) / 10);
+});
+
 document.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
@@ -436,6 +453,10 @@ document.addEventListener('click', async (e) => {
         router.go('settings');
         break;
 
+      case 'goHelp':
+        router.go('help');
+        break;
+
       case 'scanCancel':
         if (scanner) scanner.cancel();
         store.setUI({ scan: null });
@@ -495,14 +516,94 @@ document.addEventListener('click', async (e) => {
       case 'goEdit': router.go('edit', id); break;
       case 'goCompose': router.go('compose', id); break;
 
-      case 'applyEnhance':
-        store.toast(`已对分组应用修图（${st.groups.find((g) => g.id === id)?.photoIds.length || 0} 张）`);
-        break;
+      /* ---- 批量调色：真改像素（原来只弹 toast，是被明令禁止的假功能） ---- */
+      case 'applyEnhance': await doApplyEnhance(id, null); break;
+      case 'revertEnhance': doRevertEnhance(id); break;
+      // 从配方卡直接「批量套用」：用配方自身的参数，套到全部照片
+      case 'applyRecipeToGroup': await doApplyEnhanceToAllGroups(id); break;
+      // 从修图页加载成套方案：套用美颜配方 + 选定排版模板
+      case 'loadBundleToEdit': await doLoadBundle(el.dataset.id, el.dataset.gid); break;
 
-      case 'saveRecipe': {
-        const rid = `r_beauty_${Date.now().toString(36)}`;
-        store.actions.upsertRecipe({ id: rid, name: `我的配方 ${st.recipes.length + 1}`, type: 'beauty', params: { bright: 6, soft: 0.3, warm: 8, sat: 6, contrast: 5 } });
-        store.toast('配方已保存');
+      case 'saveRecipe': await doSaveRecipe(id); break;
+
+      /* ---- 配方管理（P1） ----
+         🔴 每个 case 末尾都必须 render()。
+            store 的 action 只改状态、不重绘 DOM，而 render() 只在
+            ①路由变化 ②弹窗 key 变化 ③显式调用 时才跑。
+            漏掉 render() 的症状是「toast 说成功了，但列表纹丝不动」——
+            真跑时就是这里发现的（绑定成套方案后 .bundle 一行都没渲染出来）。 */
+      case 'renameRecipe': {
+        const r = st.recipes.find((x) => x.id === id);
+        if (!r) break;
+        const name = window.prompt('给配方起个名字', r.name);
+        // ⚠️ 取消（null）与空串都要拦住：空名字会让列表出现无名项，最难认
+        if (name === null) break;
+        if (!String(name).trim()) { store.toast('名字不能为空'); break; }
+        store.actions.upsertRecipe({ id, name: String(name).trim() });
+        store.toast('已重命名');
+        render();
+        break;
+      }
+
+      case 'dupRecipe': {
+        const r = st.recipes.find((x) => x.id === id);
+        if (!r) break;
+        store.actions.upsertRecipe({
+          ...r,
+          id: `${r.id}_cp${Date.now().toString(36)}`,
+          name: `${r.name} 副本`,
+        });
+        store.toast('已复制一份');
+        render();
+        break;
+      }
+
+      case 'delRecipe': {
+        const r = st.recipes.find((x) => x.id === id);
+        if (!r) break;
+        // 🔴 二次确认：配方删了要重新调，误删没有撤销入口（不存在软删除）
+        if (!window.confirm(`删除配方「${r.name}」？\n删掉就找不回来了。`)) break;
+        store.actions.removeRecipe(id);
+        store.toast('已删除');
+        render();
+        break;
+      }
+
+      /* ---- 成套风格绑定 ---- */
+      case 'makeBundle': {
+        const bb = document.getElementById('bdBeauty')?.value || '';
+        const bt = document.getElementById('bdTpl')?.value || '';
+        if (!bb || !bt) { store.toast('先各选一个美颜配方和排版模板'); break; }
+        const br = st.recipes.find((x) => x.id === bb);
+        const tr = st.recipes.find((x) => x.id === bt);
+        const list = (st.settings && st.settings.recipeBundles) || [];
+        store.actions.patchSettings({
+          recipeBundles: [...list, makeBundle(null, {
+            beautyId: bb, templateId: bt,
+            name: `${br?.name || '配方'} + ${tr?.name || '模板'}`,
+          })],
+        });
+        store.toast('已绑定成成套方案');
+        render();
+        break;
+      }
+
+      /* 🔴 一键加载：从配方页直接落到某个分组的真实套用。
+       *    旧版只有一句 toast + router.go('recipes') —— 按钮点完什么都没发生，
+       *    是「看起来有、实际没有」的典型半成品。现在真跑：调色 + 定模板。
+       *    目标分组取页面上「套用到哪一组」的选择；只有一个分组时用那唯一那个。 */
+      case 'loadBundle': {
+        const gid = document.getElementById('bdTarget')?.value || (st.groups[0] || {}).id;
+        if (!gid) { store.toast('先新建一组照片，再来加载成套方案'); break; }
+        await doLoadBundle(id, gid);
+        break;
+      }
+
+      case 'delBundle': {
+        const list = (st.settings && st.settings.recipeBundles) || [];
+        store.actions.patchSettings({ recipeBundles: list.filter((b) => b.id !== id) });
+        store.toast('已删除成套方案');
+        render();
         break;
       }
 
@@ -611,6 +712,200 @@ async function doGenText(groupId) {
   else store.toast('文案已生成');
 }
 
+/* ==================== 批量调色（真像素级） ==================== */
+
+/**
+ * 对分组套用配方 —— 真的逐像素改，不是弹个提示。
+ *
+ * 🔴 与旧版的区别：旧版只有 `store.toast('已对分组应用修图（N 张）')`，
+ *    照片一个像素没动。这是"假功能"的典型形态：用户点下去看到成功提示，
+ *    却发现照片毫无变化，从此不再相信这个功能。
+ *
+ * @param {string} groupId
+ * @param {string|null} recipeId  null = 用下拉框当前选中的（空 = 默认按场景自动）
+ */
+async function doApplyEnhance(groupId, recipeId) {
+  const st = store.get();
+  const g = st.groups.find((x) => x.id === groupId);
+  if (!g) { store.toast('找不到这组照片'); return; }
+  const photos = (g.photoIds || []).map((id) => st.photos.find((p) => p.id === id))
+    .filter(Boolean).filter((p) => !p.isTiny && !p.isScreenshot);
+  if (!photos.length) { store.toast('这组里没有可处理的照片'); return; }
+
+  const recipe = resolveActiveParams(st, recipeId);
+
+  const msg = document.getElementById('enhanceMsg');
+  // 进度提示直接写进页面（批量处理可能好几秒，只靠 toast 用户会以为卡死）
+  if (msg) msg.textContent = `正在处理 0 / ${photos.length}…`;
+  store.setUI({ busy: `调色 0/${photos.length}` });
+
+  // 🔴 只跑一遍：每张只解码一次、调色一次、编码一次。
+  //    绝不能为了拿 URL 再跑一遍 —— 那是把耗时翻倍（36 张就是 72 次逐像素），
+  //    而且两次结果不一致时（jpeg 编码非确定性）会出现"预览与实际不符"。
+  const out = [];
+  const failed = [];
+  for (let i = 0; i < photos.length; i++) {
+    const one = await applyRecipeToPhoto(photos[i], recipe);
+    if (one.ok) out.push({ id: photos[i].id, enhancedUrl: one.url, enhancedAt: Date.now() });
+    else failed.push({ id: photos[i].id, reason: one.reason });
+    const cur = i + 1;
+    if (msg) msg.textContent = `正在处理 ${cur} / ${photos.length}…`;
+    store.setUI({ busy: `调色 ${cur}/${photos.length}` });
+  }
+
+  if (out.length) store.actions.upsertPhotos(out);
+  store.setUI({ busy: null });
+
+  const failN = failed.length;
+  const tail = failN ? `，${failN} 张失败（原图未动）` : '';
+  store.toast(`已调色 ${out.length} 张${tail}`);
+  render();
+}
+
+/**
+ * 🔴 调色参数的唯一取数口径。
+ *
+ * 优先级：显式传入的配方 id > 页面上滑杆的实时值。
+ *
+ * 为什么不只读下拉框：下拉框选「清透配方」之后用户拖了滑杆，
+ * 期望的是「我拖的这些数」，不是「下拉框里那个配方」。
+ * 旧版只读下拉框 → 用户拖滑杆拖了个寂寞，参数根本没生效。
+ * 现在拖了就生效，存配方存的也是这一份数字。
+ */
+function resolveActiveParams(st, recipeId) {
+  const sel = recipeId || document.getElementById('recipeSel')?.value || '';
+  if (sel) {
+    const r = st.recipes.find((x) => x.id === sel);
+    if (r && r.params) return clampParams(r.params);
+  }
+  const sliders = readSliders();
+  // 一个滑杆都没有（不在修图页）→ 空对象，让 enhance() 按 scene 取默认
+  return sliders ? clampParams(sliders) : {};
+}
+
+/** 读页面上的 5 个滑杆值；页面没有滑杆时返回 null（区别于"全是 0"） */
+function readSliders() {
+  const els = document.querySelectorAll('#sliders .sld__r');
+  if (!els.length) return null;
+  const out = {};
+  for (const el of els) out[el.dataset.p] = Number(el.value);
+  return out;
+}
+
+/** 撤销整组调色（回原图） */
+function doRevertEnhance(groupId) {
+  const st = store.get();
+  const g = st.groups.find((x) => x.id === groupId);
+  if (!g) return;
+  const list = (g.photoIds || []).map((id) => st.photos.find((p) => p.id === id)).filter(Boolean);
+  const changed = list.filter((p) => p.enhancedUrl);
+  if (!changed.length) { store.toast('这组本来就没有调色'); return; }
+  // 置 null 而不是删字段：upsertPhotos 是浅合并，写 null 才能把旧值盖掉
+  store.actions.upsertPhotos(changed.map((p) => ({ id: p.id, enhancedUrl: null, enhancedAt: null })));
+  // 顺手回收 blobURL：调色多了会吃内存（36 张 12MP JPEG ≈ 几十 MB）
+  for (const p of changed) {
+    try { URL.revokeObjectURL(p.enhancedUrl); } catch { /* 已失效就算了 */ }
+  }
+  store.toast(`已撤销 ${changed.length} 张调色，回到原图`);
+  render();
+}
+
+/** 从配方卡「批量套用」：对所有分组里含该配方可用的照片都套一遍 */
+async function doApplyEnhanceToAllGroups(recipeId) {
+  const st = store.get();
+  const r = st.recipes.find((x) => x.id === recipeId);
+  if (!r) return;
+  const all = st.photos.filter((p) => p._file && !p.isTiny && !p.isScreenshot);
+  if (!all.length) {
+    store.toast('照片的原始数据已不在内存里，请重新导入后再套用');
+    return;
+  }
+  if (!window.confirm(`把「${r.name}」套用到全部 ${all.length} 张照片？\n原图不会被覆盖，随时可撤销。`)) return;
+  store.setUI({ busy: `调色 0/${all.length}` });
+  const out = [];
+  let i = 0;
+  for (const p of all) {
+    const one = await applyRecipeToPhoto(p, r.params || {});
+    if (one.ok) out.push({ id: p.id, enhancedUrl: one.url, enhancedAt: Date.now() });
+    i++;
+    store.setUI({ busy: `调色 ${i}/${all.length}` });
+  }
+  store.actions.upsertPhotos(out);
+  store.setUI({ busy: null });
+  store.toast(`已调色 ${out.length} 张 · 原图仍在，随时可撤销`);
+  router.go('edit', st.groups[0] ? st.groups[0].id : '');
+}
+
+/**
+ * 🔴 一键加载成套方案 —— 真执行，不是弹个 toast。
+ *
+ * 成套 = 美颜配方 + 排版模板。加载要真的把两件事都做掉：
+ *   1. 美颜配方 → 对该组照片跑**真实调色**（不是只记住"有个配方叫这个"）
+ *   2. 排版模板 → 写进分组，故事组装页的模板下拉会选中它，导出 H5 跟着变
+ *
+ * ⚠️ 引用可能失效（老存档里指向已删除的配方）—— 如实报错，不静默加载半套。
+ *    「加载了但只生效一半」比「明确报错」糟糕得多。
+ */
+async function doLoadBundle(bundleId, groupId) {
+  const st = store.get();
+  const b = ((st.settings && st.settings.recipeBundles) || []).find((x) => x.id === bundleId);
+  if (!b) { store.toast('找不到这套方案'); return; }
+  const beauty = st.recipes.find((r) => r.id === b.beautyId);
+  const tpl = st.recipes.find((r) => r.id === b.templateId);
+  if (!beauty || !tpl) {
+    store.toast('这套方案引用的配方已被删除，请重新绑定');
+    return;
+  }
+  const g = groupId ? st.groups.find((x) => x.id === groupId) : null;
+  if (!g) { store.toast('找不到要套用的分组'); return; }
+
+  // ② 先把模板定下来（这一步即使调色失败也已完成，如实分步汇报）
+  store.actions.setGroups([{ ...g, templateId: b.templateId }]);
+
+  // ① 再跑真实调色
+  store.toast(`正在套用「${beauty.name}」…`);
+  await doApplyEnhance(g.id, beauty.id);
+
+  store.toast(`已加载「${b.name || '成套风格'}」· 调色 + 排版模板都到位了`);
+  router.go('edit', g.id);
+}
+
+/**
+ * 保存当前配方，并**自动生成预览缩略图**。
+ *
+ * 🔴 参数来源必须是**用户眼前那 5 个滑杆的值**，不是硬编码常量。
+ *    旧版这里写死 {bright:6, soft:0.3, warm:8, sat:6, contrast:5}：
+ *    用户拖了半天滑杆，存下来的却是另一组数 —— 存的东西和看到的不一致，
+ *    比不存更糟（用户会以为"这配方就是我刚调的那个"）。
+ *
+ * 预览怎么来的：拿组内第一张有原图的照片，套用**同一份参数**真调一次色，缩到 160px 存 dataURL。
+ * 🔴 用 dataURL（**不是** blobURL）：dataURL 是字符串，能持久化，重启后预览还在。
+ *    blobURL 跨会话必失效，写进 localStorage 就是重启后一堆坏图（这个坑踩过）。
+ * 没有可用照片时不生成（不造假图），卡片就少个预览，不影响使用。
+ */
+async function doSaveRecipe(groupId) {
+  const st = store.get();
+  const g = groupId ? st.groups.find((x) => x.id === groupId) : null;
+  const params = clampParams(readSliders() || {});
+  const src = g ? (g.photoIds || []).map((id) => st.photos.find((p) => p.id === id)).find((p) => p && p._file) : null;
+
+  const name = window.prompt('给这组参数起个名字', autoName(params, '我的配方'));
+  if (name === null) return;                      // 取消就不存
+  const finalName = String(name).trim() || autoName(params, '我的配方');
+
+  let thumb = '';
+  if (src) {
+    const one = await applyRecipeToPhoto(src, params);
+    if (one.ok) thumb = await downscaleToDataURL(one.url, 160);
+  }
+  const rid = `r_beauty_${Date.now().toString(36)}`;
+  store.actions.upsertRecipe({
+    id: rid, name: finalName, type: 'beauty', params, thumb,
+  });
+  store.toast(thumb ? `已保存「${finalName}」（含调色预览）` : `已保存「${finalName}」（暂无照片，未生成预览）`);
+  router.go('recipes');
+}
+
 /* ==================== 完成并归档 ==================== */
 
 async function doFinish(groupId) {
@@ -665,23 +960,29 @@ async function doExport(storyId, kind) {
 
   store.toast('正在生成…');
   try {
+    // 🔴 导出用调色后的版本，但**不改 export.js**（用户明令：禁止改底层导出渲染逻辑）。
+    //    toExportPhotos 只做数据包装：把 enhancedUrl 的字节装进临时副本的 _file，
+    //    九宫格/长图/H5 三条导出链路各自照旧跑，store 里的照片一个字节都不动。
+    const xPhotos = await toExportPhotos(photos);
+    const usedEnhanced = xPhotos.some((x, i) => x !== photos[i]);
     let rec;
     if (kind === 'grid') {
-      const c = await makeNineGrid(photos);
+      const c = await makeNineGrid(xPhotos);
       const fn = `帧叙集-九宫格-${s.text?.cover || storyId}.jpg`;
       await downloadCanvas(c, fn);
-      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(photos[0]), storyTitle: s.text?.cover });
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover });
     } else if (kind === 'long') {
-      const c = await makeLongImage(photos, s);
+      const c = await makeLongImage(xPhotos, s);
       const fn = `帧叙集-长图-${s.text?.cover || storyId}.jpg`;
       await downloadCanvas(c, fn);
-      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(photos[0]), storyTitle: s.text?.cover });
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover });
     } else {
-      const html = buildShareHTML(s, photos, s.templateId);
+      const html = buildShareHTML(s, xPhotos, s.templateId);
       const fn = `帧叙集-${s.text?.cover || storyId}.html`;
       downloadText(html, fn);
-      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(photos[0]), storyTitle: s.text?.cover });
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover });
     }
+    if (usedEnhanced) rec.usedEnhanced = true;
     // 🔴 toast → 模态弹窗（P0-Bug1 核心）：toast 一闪就没，路径信息留不住。
     store.setUI({ exportResult: rec, exportHistory: pushRecord(store.get().ui.exportHistory, rec) });
   } catch (e) {
@@ -690,7 +991,7 @@ async function doExport(storyId, kind) {
   }
 }
 
-/** 导出历史缩略图：取第一张可用缩略图（原图优先，都没有就空） */
+/** 导出历史缩略图：调色版优先（导出的就是它，缩略图得长成那个样子） */
 function thumbOf(p) {
   if (!p) return '';
   if (p._file) { try { return URL.createObjectURL(p._file); } catch { return ''; } }

@@ -1361,6 +1361,52 @@ body.album-deco-off .album-tag--loc{display:none !important;}
 }
 .vchip__a{font-size:12px;color:var(--ink-2);line-height:1}
 
+/* ==================== 配方管理 / 成套绑定 / 调色预览（P1） ==================== */
+/* 配方卡的预览图：显示"套用本配方后的真实调色效果"（dataURL，跨会话有效） */
+.rcard__prev{
+  width:100%;height:84px;border-radius:8px;
+  background:var(--paper) center/cover no-repeat;
+  border:1px solid var(--line);
+}
+
+.rcard__acts{display:flex;flex-wrap:wrap;gap:6px;padding-top:8px;border-top:1px dashed var(--line)}
+.rbtn{
+  font-size:12px;line-height:1.6;color:var(--ink-2);
+  padding:3px 10px;border-radius:999px;
+  background:transparent;border:1px solid var(--line);
+  cursor:pointer;transition:border-color .16s ease,color .16s ease;
+}
+.rbtn:hover{border-color:var(--mint);color:var(--mint)}
+.rbtn--danger:hover{border-color:var(--alert);color:var(--alert)}
+.rbtn--off{opacity:.45;cursor:not-allowed}
+.rbtn--off:hover{border-color:var(--line);color:var(--ink-2)}
+
+.bundle{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.bundle:last-child{border-bottom:none}
+.bundle__b{flex:1 1 auto;min-width:0}
+.bundle__n{font-size:13.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bundle__m{font-size:11.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- 调色参数滑杆 ----
+   🔴 为什么用原生 input[type=range] 而不自己画：
+      原生控件自带键盘操作（方向键微调）、无障碍属性、系统级高对比度适配。
+      自己画 div+drag 的版本这四样全没有，且触屏拖动手感还不如原生。
+   accent-color 让滑杆的已填充段跟随主题色，四套主题自动适配，不需要为每个主题各写一份。 */
+.sliders{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:10px 14px;margin:12px 0 14px;
+}
+.sld{min-width:0}
+.sld__top{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:2px}
+.sld__l{font-size:12px;color:var(--ink-2);letter-spacing:.04em}
+.sld__v{font-size:12px;color:var(--brand);font-variant-numeric:tabular-nums}
+.sld__r{
+  width:100%;height:22px;margin:0;
+  accent-color:var(--mint);
+  background:transparent;
+}
+.sld__h{font-size:11px;color:var(--ink-2);opacity:.75;margin-top:1px}
+
 /* ==================== 素材配方卡（P0-Bug2：JSON 溢出修复） ====================
    🔴 这段的布局纪律：纵向 flex + min-width:0 + flex-wrap:wrap。
       原来的 `.row--between` 是横向排列且不换行，长文本必然溢出卡片 ——
@@ -1479,3 +1525,28 @@ body.album-deco-off .album-tag--loc{display:none !important;}
 .pk-btn--trash{border-color:var(--alert);color:var(--alert);}
 .pk-btn--revert{border-style:dashed;color:var(--ink-2);}
 .pk-btn:active{background:var(--privacy-bg);}
+
+/* ==================== 帮助页（P1：完整链路教程 + 能力边界） ==================== */
+.help__stat{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--ink-2)}
+.help__stat strong{color:var(--brand);font-weight:600}
+
+.help__ol{list-style:none;margin:0;padding:0;counter-reset:none}
+.help__step{display:flex;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.help__step:last-child{border-bottom:none}
+.help__n{
+  flex:0 0 auto;width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:var(--mint);border:1px solid var(--mint);
+}
+.help__b{flex:1 1 auto;min-width:0}
+.help__t{font-size:14px;color:var(--ink);display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.help__tag{
+  font-size:11px;line-height:1.7;color:var(--ink-2);
+  padding:0 7px;border-radius:999px;border:1px solid var(--line);
+}
+.help__d{font-size:12.5px;line-height:1.75;color:var(--ink-2);margin-top:3px}
+
+.help__ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.85;color:var(--ink-2)}
+.help__ul li{margin-bottom:5px}
+.help__ul strong{color:var(--ink);font-weight:600}
+.help__ul--warn li:last-child{margin-bottom:0}

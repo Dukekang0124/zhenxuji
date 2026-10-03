@@ -36,6 +36,11 @@ const EXCLUDE = new Set([
   // 🔴 它进工作区的方式是 `git rebase`（远端 auto_init 那次提交的 README），
   //    归类闸门挡是对的 —— 挡的不是"文件新出现"，而是"文档被当成了要上线的资产"。
   'README.md',
+  // 🔴 docs/ 同理：仓库文档 + 主题预览页（docs/album-theme-preview.html）。
+  //    它是 PR#1 随分支规范一起进来的，归类清单当时漏了它，
+  //    于是 `npm run build:web` / `npm run cap:sync` 在 main 上就直接抛错 ——
+  //    闸门本身是对的（未归类即失败），错的是清单没跟上。
+  'docs',
   // 🔴 functions/ = Cloudflare Pages Functions（/api/* 反代到 Worker）。
   //    它是**服务端代码**，只该进 Pages 部署包，**绝不进 www/**：
   //      ① 打进 APK 是纯浪费（用户下载用不到的服务端代码）；
