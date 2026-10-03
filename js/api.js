@@ -39,10 +39,20 @@ function push(t) {
 const STRUCTURAL = ['provider_disabled', 'provider_unconfigured', 'sdk_unavailable'];
 export function isStructural(code) { return STRUCTURAL.includes(String(code || '')); }
 
-/** 按前缀分类：不是所有错误都该重试 */
+/**
+ * 按前缀分类：不是所有错误都该重试。
+ *
+ * 🔴 2026-10-03 真实事故（0.6.0 首次带上后端地址后暴露）：
+ *    这里原来把 `network_*` 一律当可重试 —— 于是**端点不可达**时也会再试一次，
+ *    而重试同一个不可达地址在物理上不可能成功。代价是用户拿到本地文案的时间
+ *    从「1×超时」变成「2×超时」（实测 14.6s → 14.9s 含两次，最坏近 29s）。
+ *    `network_error` 是传输层失败（DNS/连接被拒/TLS 失败），必须**不重试**；
+ *    `network_timeout` 才是「对方还在想」这种可能自己好的情况，保留重试。
+ */
 export function isRetryable(code) {
   const c = String(code || '');
   if (c.startsWith('auth_') || c.startsWith('quota_') || c.startsWith('request_')) return false;
+  if (c === 'network_error') return false;          // 端点不可达，重试零收益
   return c.startsWith('network_') || c.startsWith('gateway_') || c.startsWith('model_') || c.startsWith('internal_');
 }
 

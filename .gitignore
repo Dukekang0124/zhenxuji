@@ -21,8 +21,22 @@ node_modules/
 android/keystore.properties
 *.jks
 
-# 自测/探针临时产物（里面的日志、截图体积大且每次都变）
-_selftest/
+# 自测：**只排除噪音，测试程序本身必须入库**。
+#   311 条断言是这个项目最值钱的质量资产之一，整个目录 ignore 掉
+#   = 每次 clone 都把它弄丢、CI 也无从复现。真正该剔的是一次性探针、
+#   运行日志和截图（7.9MB 里绝大部分是这个）。
+_selftest/_*.cjs
+_selftest/_*.log
+_selftest/_*.out*
+_selftest/_audit*/
+_selftest/_srv*/
+_selftest/*.log
+_selftest/*.out.txt
+_selftest/shots/
+_selftest/ip-*
+_selftest/*.png
+_selftest/*.jpg
+_selftest/*.mp4
 work/
 *.log
 
