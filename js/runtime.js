@@ -18,15 +18,30 @@
  */
 
 /**
- * 内置服务地址（= 已部署的 Worker 根地址，形如 https://zhenxuji-api.<账号>.workers.dev）。
+ * 内置服务地址 = 站点自己的域名（Pages 上的 /api/* 由 Functions 反向代理到 Worker）。
  *
  * ⚠️ **留空 = 智能文案永远走本地兜底**（能用，但不是 AI 写的）。
- *    部署 Worker 后把地址填到这里，改一行即可，用户端零配置、不用重新教用户去设置页填。
+ *    部署后把地址填到这里，改一行即可，用户端零配置、不用重新教用户去设置页填。
  *    `npm run build:web` 会在为空时打一条醒目警告，避免"忘了填"一路带进 APK。
- *    取值必须与 worker/ 的部署地址一致；Worker 的 Origin 白名单已包含
- *    https://zhenxuji.pages.dev 与 https://localhost（APK WebView），所以两端都能直连。
+ *
+ * 🔴 为什么填 pages.dev 而**不是** Worker 自己的 workers.dev 地址（实测教训）：
+ *    本机与国内的实测结果 —— 同一时刻、同一条网络：
+ *      ✅ https://zhenxuji.pages.dev/version.json        → 200
+ *      ✅ https://github.com/...                          → 206
+ *      ❌ https://zhenxuji-api.kang7108558.workers.dev    → Connect Timeout
+ *    即 **`*.workers.dev` 这个域名被稳定阻断，而 `pages.dev` 可达**。
+ *    若把 Worker 地址直接内置，**用户在手机上同样连不上** → AI 文案上线即不可用，
+ *    而且因为 api.js 会静默降级到本地兜底，界面上**不报任何错** ——
+ *    这正是最难被发现的那类故障（功能"看起来正常"，只是永远不是 AI 写的）。
+ *
+ *    解法：内置 Pages 域名，由 functions/api/[[path]].js 在**服务端**转发到 Worker。
+ *    服务端转发走 Cloudflare 机房内部网络，不受终端所在网络的域名阻断影响。
+ *    附带收益：Worker 地址从端侧彻底消失（攻击面收窄、换后端不用重发 APK）。
+ *
+ *    取值必须与站点域名一致；Worker 的 Origin 白名单已包含 https://zhenxuji.pages.dev
+ *    与 https://localhost（APK WebView），所以 Web 与 APK 两端都能直连。
  */
-export const BUILTIN_API_ORIGIN = 'https://zhenxuji-api.kang7108558.workers.dev';
+export const BUILTIN_API_ORIGIN = 'https://zhenxuji.pages.dev';
 
 /**
  * 把一个地址归一成「可以作为 API 根」的形式。

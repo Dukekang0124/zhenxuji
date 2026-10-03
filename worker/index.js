@@ -58,10 +58,10 @@ export default {
     };
 
     try {
-      if (url.pathname === '/api/llm' && req.method === 'POST') return await handleLLM(req, keys, cors);
+      if (url.pathname === '/api/llm' && req.method === 'POST') return await handleLLM(req, keys, env, cors);
       if (url.pathname === '/api/llm/config') return json(configSnapshot(cfg, env), 200, cors);
       if (url.pathname === '/api/llm/stats') return json(getStats(), 200, cors);
-      if (url.pathname === '/api/story' && req.method === 'POST') return await handleStory(req, keys, cors);
+      if (url.pathname === '/api/story' && req.method === 'POST') return await handleStory(req, keys, env, cors);
       if (url.pathname.startsWith('/api/share/')) return await handleShare(req, env, url, cors);
       // 版本配置（方案 §2.9.8）：APK 走 /version.json 由 Cloudflare 静态托管；
       // 这里再兜一个 /api/version，保证 Workers 部署形态下也能读到同一份配置。
@@ -133,7 +133,7 @@ async function handleVersion(env, cors) {
 
 /* ---------------- 统一模型入口 ---------------- */
 
-async function handleLLM(req, keys, cors) {
+async function handleLLM(req, keys, env, cors) {
   const b = await req.json().catch(() => null);
   if (!b || typeof b !== 'object') return json({ error: 'invalid_body' }, 400, cors);
 
@@ -142,6 +142,8 @@ async function handleLLM(req, keys, cors) {
     return json({ error: 'module_not_allowed', module: moduleName }, 400, cors);
   }
 
+  // 🔴 env 必须一路传到底：LLM_DISABLE_MODELS 灰度开关在 Worker 上只能从 env 读，
+  //    读 process.env 会抛 "process is not defined" 把整个请求打成 500。
   const r = await route(loadConfig(cfg), keys, {
     module: moduleName,
     system: String(b.system || '').slice(0, 4000),
@@ -149,7 +151,7 @@ async function handleLLM(req, keys, cors) {
     temperature: Number(b.temperature) || undefined,
     maxTokens: Number(b.maxTokens) || undefined,
     json: Boolean(b.json),
-  });
+  }, env);
 
   // 回包只给可观测信息：用了谁、降没降级、试过谁。**不给 endpoint、不给 key**
   return json({
@@ -160,7 +162,7 @@ async function handleLLM(req, keys, cors) {
 
 /* ---------------- 手记文案（业务封装，内部走同一收口） ---------------- */
 
-async function handleStory(req, keys, cors) {
+async function handleStory(req, keys, env, cors) {
   const b = await req.json().catch(() => null);
   if (!b || typeof b !== 'object') return json({ error: 'invalid_body' }, 400, cors);
 
@@ -186,7 +188,7 @@ async function handleStory(req, keys, cors) {
 
   const r = await route(loadConfig(cfg), keys, {
     module: 'story', system, user, maxTokens: 900,
-  });
+  }, env);
 
   return json({
     ok: r.ok, content: r.text, model: r.model, provider: r.provider,

@@ -20,8 +20,39 @@ import { route, resolveCandidates, normalizeCode, configSnapshot, getStats } fro
 import cfg from './llm.config.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.join(ROOT, '..');
-const APP = path.join(PROJECT_ROOT, '帧叙集-app');
+
+/**
+ * 🔴 App 目录要**探测**，不能靠固定层级写死。
+ *    worker 曾与 帧叙集-app 同级，后来为了让 Worker 代码进版本控制被移入
+ *    帧叙集-app/worker —— 于是 `path.join(ROOT, '..')` 从「app 的父目录」
+ *    变成了「app 自己」，`APP` 拼成了 `.../帧叙集-app/帧叙集-app`，
+ *    密钥扫描段直接 ENOENT 崩溃。
+ *    探测规则：向上找第一个含 index.html 的目录（那才是 App 根）。
+ */
+function findAppRoot(start) {
+  let d = start;
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(d, 'index.html')) && fs.existsSync(path.join(d, 'js'))) return d;
+    const up = path.dirname(d);
+    if (up === d) break;
+    d = up;
+  }
+  return start;
+}
+const APP = findAppRoot(ROOT);
+// 项目根 = App 根往上最多两层里，第一个存在 06-产品规划 / 05-技术选型 的目录；
+// 找不到就退回 App 根（此时"覆盖文档目录"那条断言会如实报红，而不是崩溃）
+function findProjectRoot(start) {
+  let d = start;
+  for (let i = 0; i < 4; i++) {
+    if (fs.existsSync(path.join(d, '05-技术选型')) || fs.existsSync(path.join(d, '06-产品规划'))) return d;
+    const up = path.dirname(d);
+    if (up === d) break;
+    d = up;
+  }
+  return start;
+}
+const PROJECT_ROOT = findProjectRoot(APP);
 
 const results = [];
 const sections = [];
@@ -262,6 +293,19 @@ sec('C2. 受控故障注入（不依赖上游健康度）');
  * 正确做法：把"失败"做成受控输入 —— 用假 config / 假 key / 假端点，
  * 让注定失败的档与健康的档同处一条链，观察调度器是否按序跳过、最终落到健康档。
  * 这样无论上游怎么变，断言都成立，且证明力更强（我们在控制变量，而非碰运气）。
+ *
+ * 🔴 第二层教训（本段自己踩过，2026-10-03 修）：
+ *    本节曾写 `{ ...keys, GLM_KEY_53: INVALID_KEY }` —— 只覆盖首档的 key，
+ *    而 `keys` 是从 process.env.K1..K4 读的。本机没配 K4 时：
+ *      resolveCandidates() 第 114 行 `if (!key) continue;` 把兜底档**静默剔除**，
+ *      候选链只剩 1 档 → 循环只跑一轮 → tried=1、
+ *      「首档失败后降级到下一档」「最终落在兜底档」三条断言全红。
+ *    但被测对象（调度器）本身是对的 —— 它压根没拿到第 2 档。
+ *    **这就是"测量仪器依赖环境"的经典复现**：C2 段的全部意义就是摆脱环境依赖，
+ *    结果它自己又引入了环境依赖。修法：本段一律用 logicKeys（与 A 段同源），
+ *    永不依赖 K1..K4 是否配置。
+ *    推论一条通用规则：**受控注入实验里，"环境提供的输入"必须被完全替换，
+ *    不能部分覆盖** —— 部分覆盖 = 让环境决定实验有几组对照。
  */
 {
   // ① 首位档用不存在的模型名 + 指向真实端点的假 key → 必然鉴权/模型错 → 应换档
@@ -270,33 +314,74 @@ sec('C2. 受控故障注入（不依赖上游健康度）');
   cfgInject.models['GLM-5.3-Flash'].enabled = true;
   // 🔴 假 key 绝对不能长得像真 key —— 否则会被本文件末尾的「密钥泄漏扫描」抓到，
   //    变成"测试代码自己触发自己的安全断言"这种自伤。用一个明显非密钥的哨兵串。
+  // 🔴 基底必须用 logicKeys（全档都有值），绝不能用 keys（依赖 K1..K4 环境变量）——
+  //    否则未配 K4 时兜底档被 resolveCandidates 静默剔除，候选链只剩 1 档，
+  //    本段断言会因为"实验只有一组对照"而假红。详见段首说明。
+  //
+  // 🔴 又一层（2026-10-03 二次修）：本组两档**都是假 key**，所以它只能证明
+  //    "调度器会跳过坏档、继续走下一档"，**不能**证明"最终能成功" ——
+  //    因为链上根本没有一档是健康的，"最终成功"这个断言在这种输入下自相矛盾。
+  //    拆成两组实验，各证一件事：
+  //      实验一（#1，环境无关）：两档全假 → 证明「会继续走」，最终失败是**正确行为**
+  //      实验二（#2，需真兜底 key）：首档假 + 兜底档真 → 证明「兜底真能救回来」
+  //    实验二依赖真实上游，拿不到真 key 时**如实跳过**，绝不假装通过。
   const INVALID_KEY = 'INVALID-KEY-FOR-DEGRADE-TEST';
-  const injectKeys = { ...keys, GLM_KEY_53: INVALID_KEY };
+  const injectKeys = { ...logicKeys, GLM_KEY_53: INVALID_KEY };
   const inj = await route(cfgInject, injectKeys, { module: 'story', user: '只回复：可用', maxTokens: 32 });
 
-  console.log(`  注入组 tried=${inj.tried?.length} degraded=${inj.degraded} model=${inj.model}@${inj.provider} code=${inj.code} ms=${inj.ms}`);
+  console.log(`  实验一 注入组 tried=${inj.tried?.length} degraded=${inj.degraded} model=${inj.model}@${inj.provider} code=${inj.code} ms=${inj.ms}`);
   if (inj.tried?.length) {
     for (const t of inj.tried) console.log(`    ${t.model}@${t.provider} attempt=${t.attempt} ok=${t.ok} code=${t.code || '-'} ms=${t.ms}`);
   }
+
+  // 仪器自检：候选链必须真有 2 档，否则下面的断言测的是"1 档链"而不是"降级"
+  check('🔴 仪器自检：注入链确有 2 档候选（否则"降级"断言测的是空气）',
+    resolveCandidates(cfgInject, 'story', injectKeys).candidates.length === 2,
+    resolveCandidates(cfgInject, 'story', injectKeys).candidates.map((c) => c.model));
 
   check('注入组：首档鉴权失败后确实降级到下一档',
     inj.tried.length >= 2 && inj.tried[0].ok === false && inj.degraded === true,
     { len: inj.tried.length, firstOk: inj.tried[0]?.ok, degraded: inj.degraded });
   check('注入组的 tried[0] 记录了失败原因（不是静默跳档）',
     Boolean(inj.tried[0]?.code), inj.tried[0]);
-  check('注入组最终仍成功（降级链的兜底价值）', inj.ok === true, { code: inj.code });
-  check('注入组最终落在兜底档 GLM-4-Flash', inj.model === 'GLM-4-Flash', inj.model);
+  check('注入组最终落在兜底档 GLM-4-Flash（走完了整条链才认输）',
+    inj.model === 'GLM-4-Flash', inj.model);
+  // 本组两档全坏，所以"整链失败"才是正确结果 —— 这条断言是**正向**断言，不是妥协
+  check('🔴 两档全坏时如实判失败（链上没有健康档，"成功"才是 bug）',
+    inj.ok === false && Boolean(inj.code), { ok: inj.ok, code: inj.code });
 
   // ② 全档注入无效 key → 必须整链失败且如实返回，不允许假装成功
+  // 同理走 logicKeys 基底：本组要的是"两档都在、且两档都坏"，
+  // 若基底用 keys 且 K4 缺失，就会退化成"1 档全坏"，断言强度被环境偷偷削掉。
   const cfgAllBad = clone(cfg);
   cfgAllBad.tiers.premium = ['GLM-5.3-Flash', 'GLM-4-Flash'];
-  const allBadKeys = { GLM_KEY_53: INVALID_KEY, GLM_KEY_4F: 'INVALID-KEY-FOR-ALL-BAD-TEST' };
+  const allBadKeys = { ...logicKeys, GLM_KEY_53: INVALID_KEY, GLM_KEY_4F: 'INVALID-KEY-FOR-ALL-BAD-TEST' };
   const bad = await route(cfgAllBad, allBadKeys, { module: 'story', user: 'OK', maxTokens: 16 });
   console.log(`  全坏组 ok=${bad.ok} code=${bad.code} tried=${bad.tried?.length}`);
   check('全档失效时如实返回失败（绝不假装成功）',
     bad.ok === false && Boolean(bad.code), { ok: bad.ok, code: bad.code });
   check('全档失效时 tried 记录了每一档（排障能看到完整链路）',
     (bad.tried?.length || 0) >= 2, bad.tried?.length);
+  check('🔴 未配置环境变量时本段依然成立（C2 段存在的全部意义）',
+    presentCount < 4 ? bad.tried?.length >= 2 : true,
+    { presentCount, triedLen: bad.tried?.length });
+
+  // ③ 实验二：首档坏 + 兜底档真 → 证明降级链真能"救回来"（不只是"会继续走"）
+  //    这一组才配叫"兜底价值"。需要真实上游，拿不到真 key 时如实跳过。
+  if (keys.GLM_KEY_4F) {
+    const rescueKeys = { ...logicKeys, GLM_KEY_53: INVALID_KEY, GLM_KEY_4F: keys.GLM_KEY_4F };
+    const res = await route(cfgInject, rescueKeys, { module: 'story', user: '只回复两个字：可用', maxTokens: 32 });
+    console.log(`  实验二 兜底救援组 ok=${res.ok} tried=${res.tried?.length} degraded=${res.degraded} model=${res.model}@${res.provider} ms=${res.ms}`);
+    check('🔴 首档故障时兜底档真的把请求救回来了（降级链的核心价值）',
+      res.ok === true && res.degraded === true, { ok: res.ok, degraded: res.degraded, code: res.code });
+    check('🔴 救援成功时落点确实是兜底档（不是一个意外命中的档）',
+      res.model === 'GLM-4-Flash', res.model);
+    check('救援组的轨迹里首档是失败的（证明"救回来"不是首档本来就好）',
+      res.tried?.[0]?.ok === false, res.tried?.[0]);
+  } else {
+    console.log('  ⚠️ 实验二（兜底救援）跳过：未提供 K4 真实密钥，无法证明"兜底真能救回来"。');
+    console.log('     → 本组不写断言，**绝不假装通过**。配好 K4 后重跑即可补齐这条证据。');
+  }
 
   // ③ 端到端时延边界：注入组应在合理时间内收敛（不是无限重试拖死）
   check('注入组在 20s 内收敛（重试策略没有把请求拖死）',
@@ -346,6 +431,126 @@ sec('D. 密钥零泄漏扫描');
   check('前端 api.js 不再出现模型名常量', !apiTxt.includes('GLM-4-Flash'), 'still has model const');
   check('前端设置页不再有 API Key 输入框',
     !fs.readFileSync(path.join(APP, 'js', 'pages.js'), 'utf8').includes('id="apiKey"'), 'apiKey input still exists');
+}
+
+/* ---------------- E. Worker 运行时兼容性（Node 有、Worker 没有的东西） ---------------- */
+
+sec('E. Worker 运行时兼容性扫描');
+
+/**
+ * 🔴 本区存在的理由（一个真事故）：
+ *    llm-router.js 里曾有一行 `String(process.env.LLM_DISABLE_MODELS || '')`，
+ *    它在 resolveCandidates() 里**每次请求都执行**。
+ *    Node 有 `process` → 本地全绿；Cloudflare Worker **没有** `process` →
+ *    线上每个走模型的请求都 500 `{"error":"internal_error","message":"process is not defined"}`，
+ *    前端只能静默降级成本地文案，界面上不报任何错。
+ *
+ *    本地 56 条断言全过、控制面指纹核对全过、站点内容全过 —— 这个 bug 依然活着，
+ *    直到打完真实线上 HTTP（pages.dev/api/llm）才暴露。
+ *    教训：**「测过」必须包含「在目标运行时里测过」**；本地单测覆盖不了运行时差异。
+ *
+ *    由于本机打不通 *.workers.dev（域名被阻断），没法每次都靠真跑兜底，
+ *    所以补一道**静态扫描**：凡是会被部署进 Worker 的模块（index.js / llm-router.js /
+ *    llm.config.js），出现裸的 `process.` 引用就报红。
+ *    （.cjs 探针与 verify-*.js 只在 Node 跑，不部署，不扫。）
+ */
+{
+  const DEPLOYED = ['index.js', 'llm-router.js', 'llm.config.js'];
+
+  /**
+   * 🔴 剥注释必须跟踪**多行块注释状态**，不能只按行处理。
+   *    第一版只做了 `.replace(/\/\/.*$/,'')` + 单行 `/* *\/` 剥离，
+   *    结果把整段 JSDoc 里的 `process.env` 字样全当成了违规代码
+   *    （6 条误报全指向 `*` 开头的注释行）—— "测量仪器坏了"的又一例。
+   *    正确做法：逐行推进一个 inBlock 状态机。
+   */
+  function stripComments(src) {
+    const out = [];
+    let inBlock = false;
+    for (const raw of src.split('\n')) {
+      let line = raw;
+      let acc = '';
+      let i = 0;
+      while (i < line.length) {
+        if (inBlock) {
+          const end = line.indexOf('*/', i);
+          if (end === -1) { i = line.length; break; }
+          i = end + 2; inBlock = false; continue;
+        }
+        const b = line.indexOf('/*', i);
+        const s = line.indexOf('//', i);
+        if (s !== -1 && (b === -1 || s < b)) { acc += line.slice(i, s); i = line.length; break; }
+        if (b !== -1) { acc += line.slice(i, b); i = b + 2; inBlock = true; continue; }
+        acc += line.slice(i); i = line.length;
+      }
+      out.push(acc);
+    }
+    return out;
+  }
+
+  const problems = [];
+  for (const f of DEPLOYED) {
+    const fp = path.join(ROOT, f);
+    if (!fs.existsSync(fp)) { problems.push(`${f} 不存在`); continue; }
+    const lines = stripComments(fs.readFileSync(fp, 'utf8'));
+    lines.forEach((code, i) => {
+      if (!/\bprocess\./.test(code)) return;
+      // 允许的唯一形态：同一行里带 typeof 存在性判断，否则就是会在 Worker 上炸的裸引用
+      const guarded = /typeof\s+process\s*[!=]==?\s*['"]undefined['"]/.test(code);
+      if (!guarded) problems.push(`${f}:${i + 1} 裸引用 process → ${code.trim().slice(0, 90)}`);
+    });
+  }
+  check('🔴 部署进 Worker 的三个模块里没有未受保护的 process 引用（线上 500 的主因）',
+    problems.length === 0, problems);
+
+  // 🔴 注释剥离自身也要被验证：喂一段"注释里有 process、代码里干净"的样例，必须 0 违规
+  const commentOnly = [
+    '/**',
+    ' * 说明：这里提到 process.env 只是文档描述，不是代码。',
+    ' */',
+    'const a = 1; // 尾注释也提到 process.env',
+    "if (typeof process !== 'undefined') { const b = process.env.X; }",
+  ].join('\n');
+  const commentProblems = stripComments(commentOnly).filter((c) => /\bprocess\./.test(c)
+    && !/typeof\s+process\s*[!=]==?\s*['"]undefined['"]/.test(c));
+  check('🔴 注释剥离正确：注释里的 process 字样不被判违规（否则会制造一堆误报）',
+    commentProblems.length === 0, commentProblems);
+
+  // 而真代码里的裸引用必须仍被抓住（不能因为剥得太狠而失效）
+  const realBad = stripComments("const x = String(process.env.FOO || '');");
+  const stillCaught = realBad.some((c) => /\bprocess\./.test(c)
+    && !/typeof\s+process\s*[!=]==?\s*['"]undefined['"]/.test(c));
+  check('🔴 剥注释后仍能抓到真代码里的裸 process 引用（没剥过头）',
+    stillCaught === true, { stillCaught });
+
+  // 受保护形态不应误伤
+  const okSample = "if (typeof process !== 'undefined' && process.env) x = process.env.FOO;";
+  const guarded = /typeof\s+process\s*[!=]==?\s*['"]undefined['"]/.test(okSample);
+  check('受 typeof 保护的 process 引用不被误判（避免把合法写法当违规）', guarded === true, { guarded });
+
+  // resolveCandidates / route 必须能接受并把 env 传下去 —— 否则灰度开关在线上失效
+  const routerSrc = fs.readFileSync(path.join(ROOT, 'llm-router.js'), 'utf8');
+  check('resolveCandidates 签名接受 env（灰度开关在 Worker 上只能从 env 读）',
+    /export function resolveCandidates\(config,\s*moduleName,\s*keys,\s*env/.test(routerSrc),
+    'resolveCandidates missing env param');
+  check('route 签名接受 env 并透传给 resolveCandidates',
+    /export async function route\(config,\s*keys,\s*req\s*=\s*\{\},\s*env/.test(routerSrc)
+    && /resolveCandidates\(config,\s*moduleName,\s*keys,\s*env\)/.test(routerSrc),
+    'route not forwarding env');
+
+  const idxSrc = fs.readFileSync(path.join(ROOT, 'index.js'), 'utf8');
+  check('index.js 两个业务入口都把 env 传给了 route（handleLLM / handleStory）',
+    (idxSrc.match(/\},\s*env\);/g) || []).length >= 2,
+    (idxSrc.match(/\},\s*env\);/g) || []).length);
+
+  // 密钥名三处必须一致：index.js 的 keys{} / llm.config.js 的 keyEnvs / 配置文件头注释
+  const cfgSrc = fs.readFileSync(path.join(ROOT, 'llm.config.js'), 'utf8');
+  const needKeys = ['GLM_KEY_53', 'SN_KEY', 'AG_KEY', 'GLM_KEY_4F'];
+  const missingInIdx = needKeys.filter((k) => !idxSrc.includes(k));
+  const missingInCfg = needKeys.filter((k) => !cfgSrc.includes(k));
+  check('🔴 四个密钥名在 index.js 与 llm.config.js 里一致（对不上会让整条链被静默剃空）',
+    missingInIdx.length === 0 && missingInCfg.length === 0,
+    { missingInIdx, missingInCfg });
 }
 
 /* ---------------- 汇总 ---------------- */

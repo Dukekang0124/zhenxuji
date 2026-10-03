@@ -5,7 +5,7 @@
       —— 否则会把数据面请求（GLM 代理、分享接口）也缓存掉，且缓存无 TTL，
       服务端变更前端长期看不到。 */
 
-const CACHE = 'zhenxuji-v0.6.1';
+const CACHE = 'zhenxuji-v0.6.2';
 // 🔴 这里**不能**列 '/version.json'：install 阶段 addAll 会把它缓存一份，
 //    而下面 fetch 处理器又显式 return 不接管 → 缓存里躺着一份永远读不到的旧数据。
 //    注释与代码打架，属于"写了但没生效"的静默问题（实测确认过）。

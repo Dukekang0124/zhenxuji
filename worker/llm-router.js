@@ -27,8 +27,29 @@ export function loadConfig(raw) {
   return raw ? JSON.parse(JSON.stringify(raw)) : cfg;
 }
 
-const disabledFromEnv = () =>
-  String(process.env.LLM_DISABLE_MODELS || '').split(',').map((s) => s.trim()).filter(Boolean);
+/**
+ * 🔴 Cloudflare Workers 里**没有 `process`**（那是 Node 的东西）。
+ *    这里曾直接写 `process.env.LLM_DISABLE_MODELS` —— 而它被 resolveCandidates()
+ *    每次调用都执行，于是线上**每个需要模型的请求都 500 internal_error:
+ *    "process is not defined"**，前端只能静默降级到本地文案。
+ *    这个 bug 在本地单测里永远跑不出来（Node 有 process），
+ *    是打完真实线上 HTTP 才暴露的 —— 所以「测过」必须包含「在真实运行时里测过」。
+ *
+ *    修法：先探测 process 是否存在，再退回部署期配置（env.LLM_DISABLE_MODELS）。
+ *    传入 env 时优先用 env —— 这是 Worker 上唯一可靠的配置来源。
+ */
+function disabledList(env) {
+  let raw = '';
+  try {
+    if (env && env.LLM_DISABLE_MODELS) raw = String(env.LLM_DISABLE_MODELS);
+    else if (typeof process !== 'undefined' && process.env) raw = String(process.env.LLM_DISABLE_MODELS || '');
+  } catch (_) {
+    // Worker 里 process 不存在会直接抛 ReferenceError —— 用 try 兜住，
+    // 不能让一个「灰度开关」把整条主链路打挂
+    raw = '';
+  }
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
 
 /* ---------------- 厂商码归一 ---------------- */
 
@@ -67,13 +88,19 @@ export function normalizeCode(status, vendorCode, msg = '', provider = '') {
 
 /**
  * 解析候选链：剔除 provider 关停 / 模型 enabled:false / 无可用 key 的条目。
- * 环境变量 LLM_DISABLE_MODELS 可临时摘除某个模型（灰度/止血用）。
+ * LLM_DISABLE_MODELS 可临时摘除某个模型（灰度/止血用）——Worker 上从 env 读，
+ * 本地 Node 从 process.env 读（见 disabledList 的说明：读错来源会让线上全量 500）。
+ *
+ * @param {object} config
+ * @param {string} moduleName
+ * @param {object} keys        Worker secret 映射
+ * @param {object} [env]       Worker 的 env 对象（本地单测可不传）
  */
-export function resolveCandidates(config, moduleName, keys) {
+export function resolveCandidates(config, moduleName, keys, env = null) {
   const mod = (config.modules && config.modules[moduleName]) || config.modules?.default || {};
   const tierName = mod.tier || 'premium';
   const chain = (config.tiers && config.tiers[tierName]) || [];
-  const off = disabledFromEnv();
+  const off = disabledList(env);
 
   const out = [];
   for (const modelName of chain) {
@@ -200,17 +227,18 @@ async function callOnce(cand, { system, user, temperature, maxTokens, json }) {
 
 /**
  * @param {object} config 结构配置
- * @param {object} keys   { GLM_KEY_A: '...', ... }
+ * @param {object} keys   { GLM_KEY_53: '...', SN_KEY: '...', AG_KEY: '...', GLM_KEY_4F: '...' }
  * @param {object} req    { module, system, user, temperature, maxTokens, json }
+ * @param {object} [env]  Worker 的 env 对象（承载 LLM_DISABLE_MODELS 灰度开关）
  */
-export async function route(config, keys, req = {}) {
+export async function route(config, keys, req = {}, env = null) {
   const moduleName = String(req.module || 'default');
   if (!(config.modules && config.modules[moduleName])) {
     // 模块白名单：不允许前端凭空造模块名去打模型（也是一种越权）
     if (moduleName !== 'default') return { ok: false, code: 'module_not_allowed', tried: [] };
   }
 
-  const { tier, candidates } = resolveCandidates(config, moduleName, keys);
+  const { tier, candidates } = resolveCandidates(config, moduleName, keys, env);
   if (!candidates.length) {
     return { ok: false, code: 'no_candidate', tier, tried: [], degraded: false };
   }

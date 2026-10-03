@@ -6,6 +6,13 @@
 # 构建产物（build:web 生成；CI 自己会跑一遍）
 www/
 
+# Pages 部署根（build:web 生成 = www 静态资产 + functions/ 反代，每次重建即可）。
+# 🔴 必须忽略：它内含 www 的副本，入库会让「改一处、两处不同步」这类问题
+#    在 diff 里看不出来 —— 真正的源是 functions/ 与 js/，不是这个拼装结果。
+_pages/
+# 一次性探针目录（验证 functions 放置位置用，不是产物也不是源）
+_pages_probe/
+
 # Capacitor 平台目录：CI 由 `capacitor add android` 每次重新生成
 # （本地那份是为了本机出包用，不入库）
 android/

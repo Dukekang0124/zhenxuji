@@ -36,6 +36,16 @@ const EXCLUDE = new Set([
   // 🔴 它进工作区的方式是 `git rebase`（远端 auto_init 那次提交的 README），
   //    归类闸门挡是对的 —— 挡的不是"文件新出现"，而是"文档被当成了要上线的资产"。
   'README.md',
+  // 🔴 functions/ = Cloudflare Pages Functions（/api/* 反代到 Worker）。
+  //    它是**服务端代码**，只该进 Pages 部署包，**绝不进 www/**：
+  //      ① 打进 APK 是纯浪费（用户下载用不到的服务端代码）；
+  //      ② 里面含 Worker 上游地址，进包等于把后端地址分发给每个用户。
+  //    它的去处在 build:web 末尾：单独复制进 _pages/ 部署根（见该段注释）。
+  'functions',
+  // _pages/ 是本脚本产出的「Pages 部署根」（静态资产 + functions），属构建产物
+  '_pages',
+  // _pages_probe/ 是验证代理方案时的一次性目录，已废弃
+  '_pages_probe',
 ]);
 
 /* ── ① 归类断言 ────────────────────────────────────────────── */
@@ -244,3 +254,59 @@ if (missing.length) {
   throw new Error('missing packaged dependency: ' + missing.join(', '));
 }
 console.log('[build:web] dependency closure OK —', jsFiles.length, 'js files checked');
+
+/* ── ④ 生成 Pages 部署根 _pages/ ──────────────────────────────── */
+
+/**
+ * 🔴 为什么需要这一步（不是多此一举）：
+ *    Cloudflare Pages Functions 要求 `functions/` 位于**部署根**，
+ *    且**不能**在静态资产根（如 www/）里面 —— 官方文档明确写了这一点。
+ *    所以不能只部署 www/，否则 /api/* 反代根本不会生效，
+ *    表现为 App 请求 pages.dev/api/story 打到静态资源 → 404，
+ *    而 App 会静默降级到本地兜底，界面上不报错（最难发现的那类故障）。
+ *
+ *    这个目录把两者拼在一起：
+ *      _pages/          ← wrangler pages deploy _pages
+ *        ├── (www/ 的内容，平铺)
+ *        └── functions/ ← Pages Functions（/api/* → Worker）
+ *
+ *    与 www/ 严格分离：www/ 给 APK 用（cap copy android），**绝不能含 functions**
+ *    （服务端代码进包既浪费又泄漏后端地址）；_pages/ 只给 Pages 用。
+ */
+const pagesOut = path.join(src, '_pages');
+await rm(pagesOut, { recursive: true, force: true });
+await mkdir(pagesOut, { recursive: true });
+await cp(out, pagesOut, { recursive: true });
+await cp(path.join(src, 'functions'), path.join(pagesOut, 'functions'), { recursive: true });
+
+// 闸门：部署根必须同时具备「静态入口」与「函数入口」，缺一就是线上功能静默失效
+const hasIndex = existsSync(path.join(pagesOut, 'index.html'));
+const hasFn = existsSync(path.join(pagesOut, 'functions', 'api', '[[path]].js'));
+if (!hasIndex || !hasFn) {
+  console.error('[build:web] ✗ Pages 部署根不完整：');
+  console.error('   index.html      :', hasIndex ? 'OK' : '缺失');
+  console.error('   functions/api/  :', hasFn ? 'OK' : '缺失（/api/* 反代不会生效 → AI 文案静默退本地兜底）');
+  throw new Error('incomplete pages deploy root');
+}
+
+// 闸门：functions/ 绝不能混进 www/（会跟着 cap copy 打进 APK）
+if (existsSync(path.join(out, 'functions'))) {
+  throw new Error('functions/ 泄漏进 www/ —— 会随 cap copy 打进 APK（浪费体积 + 分发后端地址）');
+}
+
+// 闸门：代理目标必须是可达域名。直连 workers.dev 在国内被阻断（实测），
+// 一旦有人把内置地址改回 workers.dev，这里直接拦下。
+const runtimeSrc = readFileSync(path.join(src, 'js', 'runtime.js'), 'utf8');
+const mOrigin = runtimeSrc.match(/BUILTIN_API_ORIGIN\s*=\s*'([^']*)'/);
+const builtinOrigin = mOrigin ? mOrigin[1] : '';
+if (/\.workers\.dev/i.test(builtinOrigin)) {
+  throw new Error(
+    `BUILTIN_API_ORIGIN 指向 *.workers.dev（${builtinOrigin}）—— 该域名在国内被稳定阻断，`
+    + '终端会连不上且静默降级。必须填站点自己的域名（由 functions/api 反代到 Worker）。'
+  );
+}
+
+const pagesFiles = (await readdir(pagesOut, { recursive: true })).length;
+console.log('[build:web] Pages 部署根 OK — _pages/（静态 + functions/api 反代）',
+  pagesFiles, '条目；内置地址 =', builtinOrigin || '(空)');
+
