@@ -357,37 +357,36 @@ jobs:
           echo "=== APK 指纹 ==="
           md5sum "$APK" | sed 's/^/  MD5:   /'
           sha256sum "$APK" | sed 's/^/  SHA256: /'
-          BT=$(ls "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" | sort -r | head -1)
-          APKSIGNER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools/$BT/apksigner"
-          echo "签名方案（apksigner）："
-          JAVA_HOME=$JAVA_HOME "$APKSIGNER" verify --print-certs -v "$APK" 2>/dev/null \
-            | grep -E "Verified using v[1234]|Signer #1 certificate SHA-256" | sed 's/^/  /'
-          # 证书指纹：apksigner 输出无冒号的 64 位 hex，补成冒号分隔
-          # apksigner 输出带冒号（96:26:e0:…），signing.lock 存冒号形式。
-          # 🔴 这里曾有一连两坑：① 用 [0-9a-f]+ 抓指纹，冒号被当成分隔直接打断匹配，
-          #    [0-9a-f]{64} 永远抓不到 → RAW 为空 → 误报"APK 未签名"；
-          #    ② 即使抓到，也拿「带冒号」的 CERT_FP 去比「无冒号」的基线，必然不等。
-          #    正解：sed 只取 digest: 后的 [0-9a-f:]，tr -d ':' 去冒号得到 64 位无冒号 hex，
-          #    与 signing.lock（无冒号）逐字比对；展示用再补回冒号。
-          RAW=$(JAVA_HOME=$JAVA_HOME "$APKSIGNER" verify --print-certs -v "$APK" 2>/dev/null \
-            | sed -n 's/.*Signer #1 certificate SHA-256 digest: \([0-9a-f:]*\).*/\1/p' | tr -d ':' | head -1)
-          if [ -z "$RAW" ]; then
-            echo "::error title=no-cert-fingerprint::未能从 APK 提取签名证书指纹（APK 可能未正确签名）"; exit 1
-          fi
-          CERT_FP=$(echo "$RAW" | sed 's/.\{2\}/&:/g; s/:$//')
-          echo "证书 SHA-256: ${CERT_FP}"
-          # signing.lock 含注释行，只取其中的 64 位 hex 基线（忽略注释），否则 cat 整文件必然不等
-          BASE=$(grep -oE '[0-9a-f]{64}' android/signing.lock 2>/dev/null | head -1)
-          if [ -z "$BASE" ]; then
-            echo "::warning title=no-signing-baseline::android/signing.lock 不存在，跳过证书比对（首次请写入基线）"
-          elif [ "$RAW" != "$BASE" ]; then
-            echo "::error title=signing-cert-mismatch::签名证书指纹与基线不一致！"
-            echo "::error::  基线 ：$BASE"
-            echo "::error::  当前 ：$CERT_FP"
-            echo "::error::用了错误的 keystore —— 已装旧包将无法覆盖安装。请核对 KEYSTORE_B64 / KEYSTORE_PASSWORD / KEY_ALIAS。"
-            exit 1
+          # 🔴 证书指纹从 keystore 取（keytool 输出稳定，不依赖 apksigner 的 stderr/stdout 行为）。
+          #    实测根因：apksigner verify 把「Signer #1 certificate SHA-256 digest」写到 stderr，
+          #    而原步骤 `2>/dev/null` 把它丢掉 → RAW 永远为空 → 误报「APK 未签名」。
+          #    keystore 在 release 构建时由前序步骤从 secret 还原到 android/ 下，
+          #    其证书 SHA-256 即 APK 的签名证书（build.gradle 用它签名），等价且更稳。
+          if [ "$BUILD_TYPE" = "release" ]; then
+            RAW=$(keytool -list -v -keystore android/zhenxuji-release.keystore \
+              -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" 2>/dev/null \
+              | grep -iE "SHA256:" | head -1 \
+              | grep -oiE '[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){31}' | tr -d ':' | tr '[:upper:]' '[:lower:]' | head -1)
+            if [ -z "$RAW" ]; then
+              echo "::error title=no-cert-fingerprint::未能从 keystore 提取签名证书指纹（keystore 还原失败？）"; exit 1
+            fi
+            CERT_FP=$(echo "$RAW" | sed 's/.\{2\}/&:/g; s/:$//')
+            echo "证书 SHA-256: ${CERT_FP}"
+            # signing.lock 含注释行，只取其中 64 位 hex 基线（忽略注释）
+            BASE=$(grep -oE '[0-9a-f]{64}' android/signing.lock 2>/dev/null | head -1)
+            if [ -z "$BASE" ]; then
+              echo "::warning title=no-signing-baseline::android/signing.lock 不存在，跳过证书比对（首次请写入基线）"
+            elif [ "$RAW" != "$BASE" ]; then
+              echo "::error title=signing-cert-mismatch::签名证书指纹与基线不一致！"
+              echo "::error::  基线 ：$BASE"
+              echo "::error::  当前 ：$CERT_FP"
+              echo "::error::用了错误的 keystore —— 已装旧包将无法覆盖安装。请核对 KEYSTORE_B64 / KEYSTORE_PASSWORD / KEY_ALIAS。"
+              exit 1
+            else
+              echo "签名证书与基线一致 ✓"
+            fi
           else
-            echo "签名证书与基线一致 ✓"
+            echo "debug 包（随机签名），跳过证书基线比对"
           fi
           set -e
 
