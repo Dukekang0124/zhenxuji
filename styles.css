@@ -1024,7 +1024,14 @@ img{display:block;max-width:100%}
 .gcard{
   background:var(--card);border-radius:var(--r);overflow:hidden;
   box-shadow:var(--shadow);margin-bottom:18px;
+  /* 方案A：卡片本体可点，捞出死区。动效语言对齐既有的 .scard（同为可点卡片），
+     只换阴影/位移不换颜色，避免与品牌"无厚重色块"约束冲突。 */
+  cursor:pointer;
+  transition:box-shadow .2s,transform .16s;
 }
+.gcard:active{box-shadow:var(--shadow-lift);transform:translateY(-1px)}
+/* 卡内操作区是"另一件事"，光标与卡片区分开，减少误点预期 */
+.gcard__acts{cursor:default}
 .gcard__cover{position:relative;width:100%;aspect-ratio:16/9;background:var(--privacy-bg);overflow:hidden}
 .gcard__cover img{width:100%;height:100%;object-fit:cover}
 /* 遮罩只压暗照片下缘，保证叠字可读；不做整片染色，避免"厚重色块"观感 */
@@ -1238,6 +1245,91 @@ img{display:block;max-width:100%}
 .umodal__acts{display:flex;flex-direction:column;gap:10px}
 
 h2{font-size:14px;font-weight:400;color:var(--ink-2);letter-spacing:.10em;margin:26px 0 12px}
+
+/* ============================================================
+   相册大图查看器（四主题） — 纯新增，选择器全以 .album- 前缀
+   组件继承当前激活主题：装饰层按 [data-theme=...] 自动套用。
+   不改原图像素，只叠加边框/纹理/标签层。
+   ============================================================ */
+.album-viewer{display:flex;flex-direction:column;gap:14px;max-width:560px;margin:0 auto;padding:2px 0 10px;}
+.album-bar{display:flex;align-items:center;gap:10px;}
+.album-x{appearance:none;border:0;background:transparent;color:var(--ink-2);font:var(--font-w-body) 14px/1 var(--font);padding:6px 4px;cursor:pointer;letter-spacing:var(--font-ls);}
+.album-bar__t{flex:1;font:var(--font-w-title) 15px/1 var(--font);letter-spacing:var(--font-ls);color:var(--ink);}
+.album-deco-btn{appearance:none;cursor:pointer;border:1px solid var(--card-hairline);background:var(--card);color:var(--ink-2);font:var(--font-w-body) 13px/1 var(--font);padding:7px 13px;border-radius:999px;box-shadow:var(--shadow);}
+.album-deco-btn[aria-pressed="false"]{opacity:.55;}
+
+.album-stage{position:relative;width:100%;aspect-ratio:4/5;border-radius:calc(var(--r) + 6px);overflow:hidden;background:var(--card);box-shadow:var(--shadow-lift);border:var(--card-border,1px solid) var(--card-hairline,transparent);touch-action:pan-y;isolation:isolate;}
+
+.album-photo{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;transition:background-image var(--mo-dur) var(--mo-ease);}
+
+.album-layer{position:absolute;inset:0;pointer-events:none;display:none;}
+.album-texture{position:absolute;inset:0;pointer-events:none;display:none;z-index:1;background-repeat:repeat;background-position:center;}
+
+.album-vignette,.album-glow{display:none;z-index:2;}
+.album-perforations{display:none;position:absolute;left:0;right:0;height:13px;z-index:3;background-image:radial-gradient(circle at 7px 7px,var(--paper) 3px,transparent 3.4px);background-size:15px 13px;background-repeat:repeat-x;opacity:.92;}
+.album-perforations--top{top:2px;}
+.album-perforations--bottom{bottom:2px;}
+.album-paperframe,.album-cloudborder{display:none;z-index:4;}
+.album-plant{display:none;z-index:4;background-repeat:no-repeat;background-position:0 100%;background-size:64px auto;opacity:.9;}
+.album-stars{display:none;z-index:4;background-repeat:no-repeat;background-position:86% 12%,14% 64%,72% 82%;background-size:20px,14px,12px;}
+
+.album-tag{position:absolute;display:none;z-index:5;}
+.album-tag--note{top:12px;left:12px;font-family:"Courier New",ui-monospace,monospace;font-size:12px;letter-spacing:.08em;color:#fff;background:rgba(0,0,0,.42);padding:3px 8px;border-radius:6px;}
+.album-tag--loc{bottom:12px;right:12px;font-style:italic;font-size:13px;color:var(--brand);background:rgba(255,255,255,.72);padding:4px 10px;border-radius:999px;box-shadow:var(--shadow);}
+
+.album-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:6;width:40px;height:40px;border-radius:999px;border:1px solid var(--card-hairline);background:rgba(255,255,255,.78);color:var(--ink);font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow);backdrop-filter:blur(2px);}
+.album-prev{left:10px;}
+.album-next{right:10px;}
+
+.album-caption{display:flex;flex-direction:column;gap:1px;padding:2px 6px;}
+.album-caption__time{font:var(--font-w-body) 12px/1.5 var(--font);letter-spacing:var(--font-ls);color:var(--ink-2);}
+.album-caption__place{font:var(--font-w-title) 17px/1.3 var(--font);color:var(--ink);}
+
+.album-thumbs{display:flex;gap:8px;overflow-x:auto;padding:6px 2px 10px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;}
+.athumb{flex:0 0 auto;width:60px;height:76px;border-radius:var(--r-sm);background-size:cover;background-position:center;border:2px solid transparent;scroll-snap-align:start;cursor:pointer;box-shadow:var(--shadow);position:relative;}
+.athumb--on{border-color:var(--mint);box-shadow:0 0 0 2px rgba(var(--mint-rgb),.55) inset,var(--shadow-lift);}
+
+.album-pager{display:none;gap:8px;justify-content:center;padding:2px 0 4px;}
+.album-pager__dot{width:22px;height:3px;border-radius:999px;border:0;background:var(--line);cursor:pointer;padding:0;transition:width var(--mo-dur) var(--mo-ease),background var(--mo-dur) var(--mo-ease);}
+.album-pager__dot--on{width:34px;background:var(--brand);}
+
+/* —— 清简 origin：干净原图 + 细线分页器 —— */
+[data-theme='origin'] .album-stage{border-radius:var(--r);}
+[data-theme='origin'] .album-pager{display:flex;}
+
+/* —— 山野信笺 forest：薄纸张边框 + 肌理 + 植物 + 手写定位标签 —— */
+[data-theme='forest'] .album-paperframe{display:block;border:1px solid var(--card-hairline);box-shadow:inset 0 0 0 7px var(--paper),inset 0 0 0 8px var(--card-hairline);}
+[data-theme='forest'] .album-texture{display:block;background-image:var(--tex-image);background-size:var(--tex-size,180px);mix-blend-mode:multiply;opacity:.42;}
+[data-theme='forest'] .album-plant{display:block;}
+[data-theme='forest'] .album-tag--loc{display:inline-flex;}
+
+/* —— 胶片叙忆 film：暗角 + 齿孔 + 颗粒 + 复古编号 —— */
+[data-theme='film'] .album-stage{border:2px solid var(--ink);}
+[data-theme='film'] .album-vignette{display:block;background:radial-gradient(125% 125% at 50% 50%,transparent 52%,rgba(0,0,0,.34) 100%);}
+[data-theme='film'] .album-perforations{display:block;}
+[data-theme='film'] .album-texture{display:block;background-image:var(--tex-image);background-size:var(--tex-size,200px);mix-blend-mode:multiply;opacity:.5;}
+[data-theme='film'] .album-tag--note{display:inline-block;}
+[data-theme='film'] .album-caption__place{font-family:Georgia,"Songti SC",serif;letter-spacing:.02em;}
+
+/* —— 甜屿碎光 sweet：柔光外发光 + 云朵边框 + 星光 + 贴纸 —— */
+[data-theme='sweet'] .album-stage{border-radius:calc(var(--r) + 16px);}
+[data-theme='sweet'] .album-glow{display:block;background:radial-gradient(58% 48% at 50% 40%,rgba(255,255,255,.55),transparent 70%),radial-gradient(130% 120% at 50% 60%,transparent 52%,rgba(var(--mint-rgb),.45) 100%);box-shadow:inset 0 0 60px rgba(var(--mint-rgb),.25);}
+[data-theme='sweet'] .album-cloudborder{display:block;box-shadow:inset 0 0 0 9px #fff,inset 0 0 0 13px rgba(var(--mint-rgb),.5);}
+[data-theme='sweet'] .album-stars{display:block;}
+[data-theme='sweet'] .album-texture{display:block;background-image:var(--tex-image);background-size:var(--tex-size,200px);mix-blend-mode:screen;opacity:.6;}
+[data-theme='sweet'] .album-tag--loc{display:inline-flex;background:rgba(var(--mint-rgb),.55);color:#fff;font-style:normal;box-shadow:var(--shadow);}
+
+/* —— 装饰开关：回到干净视图（暗角/柔光/齿孔/云朵/星光/植物/纸张肌理/标签全部隐去） —— */
+body.album-deco-off .album-vignette,
+body.album-deco-off .album-glow,
+body.album-deco-off .album-perforations,
+body.album-deco-off .album-paperframe,
+body.album-deco-off .album-cloudborder,
+body.album-deco-off .album-plant,
+body.album-deco-off .album-stars,
+body.album-deco-off .album-texture,
+body.album-deco-off .album-tag--note,
+body.album-deco-off .album-tag--loc{display:none !important;}
 
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms !important;transition-duration:.001ms !important}

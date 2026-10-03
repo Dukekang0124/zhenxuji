@@ -102,7 +102,8 @@ const ICON_BOOK_LARGE = `<svg viewBox="0 0 64 64" width="64" height="64" ${S_THI
 export function pageAlbum({ state }) {
   if (!state.photos.length) {
     return `<h1 class="page-title">相册总览</h1>${softEmpty('还没有照片哦', '回新建页选几张照片，就可以开始整理故事了')}
-      <button class="btn btn--block" data-act="pickAlbum">导入照片</button>`;
+      <button class="btn btn--block" data-act="pickAlbum">导入照片</button>
+      <button class="btn btn--block btn--ghost" data-act="openViewer">预览相册（四主题查看器）</button>`;
   }
   const scan = state.ui.scan;
   const groups = state.groups.map(groupCard).join('');
@@ -121,6 +122,7 @@ export function pageAlbum({ state }) {
       <div class="row" style="gap:8px;margin-bottom:14px">
         <button class="btn btn--sm btn--ghost" data-act="pickAlbum">补充导入</button>
         <button class="btn btn--sm btn--ghost" data-act="regroup">重新聚类</button>
+        <button class="btn btn--sm btn--ghost" data-act="openViewer">查看大图</button>
       </div>`}
 
     ${state.groups.length ? groups : softEmpty('暂时还没分出组', '照片再多一些，或者回到新建页重新整理一次就会好')}`;
@@ -130,11 +132,17 @@ export function pageAlbum({ state }) {
  * 事件分组卡（规范六.2）：照片作封面大图，标题以半透雾棕叠在照片下缘。
  * 叠加层用渐变遮罩保证任何亮度照片上文字都读得清 —— 规范禁止厚重色块，
  * 渐变遮罩是保证可读性的最小手段，不构成"网红渐变装饰"。
+ * 🔴 方案A（2026-10-03）：卡片本体改为可点，点开该分组大图浏览。
+ *    传 groupId + 封面照片 **id**（不用序号 —— viewer 会过滤废片，序号必然错位）。
+ *    卡内 .gcard__acts 三个按钮自带 data-act，事件委托 closest([data-act]) 会优先
+ *    命中按钮本身，故「制作故事 / 重命名 / 删除」不会被卡片点击劫持。
+ *    不改动任何分组数据读取逻辑，只增加一个交互入口。
  */
 function groupCard(g) {
   const hasCover = Boolean(g.coverThumb);
   return `
-    <div class="gcard ${hasCover ? '' : 'gcard--nophoto'}">
+    <div class="gcard ${hasCover ? '' : 'gcard--nophoto'}"
+         data-act="openViewer" data-id="${esc(g.id)}" data-start="${esc(g.coverId || '')}">
       <div class="gcard__cover">
         ${hasCover
           ? `<img src="${esc(g.coverThumb)}" alt=""><span class="gcard__veil"></span>

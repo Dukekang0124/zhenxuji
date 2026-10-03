@@ -74,6 +74,8 @@ _selftest/ip-*
 _selftest/*.png
 _selftest/*.jpg
 _selftest/*.mp4
+# 自测截图产物（本地评审用，不入库）
+docs/_shot_*.png
 work/
 *.log
 
