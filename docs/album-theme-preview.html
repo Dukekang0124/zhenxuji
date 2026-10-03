@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>帧叙集 · 相册查看器四主题预览</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+  /* 预览页外壳：仅排版用，不影响 .album-* 组件样式 */
+  body{margin:0;background:#F4F1EC;color:#3A3835;font-family:"Source Han Sans SC","Noto Sans SC","PingFang SC",system-ui,sans-serif;padding:22px 16px 64px;}
+  .wrap{max-width:1080px;margin:0 auto;}
+  h1{font-size:20px;font-weight:300;letter-spacing:.08em;margin:0 0 4px;}
+  .lead{font-size:13px;line-height:1.7;color:#8B8680;margin:0 0 18px;max-width:760px;}
+  .toolbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    background:rgba(244,241,236,.92);backdrop-filter:blur(6px);padding:10px 0;margin-bottom:18px;border-bottom:1px solid #E7E2DD;}
+  .toolbar .lbl{font-size:12px;color:#8B8680;margin-right:4px;}
+  .tbtn{appearance:none;cursor:pointer;border:1px solid #E0D9D1;background:#fff;color:#6B6459;
+    font-size:13px;padding:8px 14px;border-radius:999px;box-shadow:0 1px 4px rgba(122,111,101,.06);transition:.15s;}
+  .tbtn.on{border-color:#6B6459;background:#6B6459;color:#fff;}
+  .tbtn.deco.on{background:#AB4E66;border-color:#AB4E66;}
+  .sec-title{font-size:13px;font-weight:400;letter-spacing:.12em;color:#8B8680;margin:30px 0 14px;}
+  /* 四主题并排 */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
+  @media (max-width:680px){.grid{grid-template-columns:1fr;}}
+  .cmp{background:#fff;border:1px solid #ECE7E1;border-radius:18px;padding:14px;box-shadow:0 2px 10px rgba(122,111,101,.05);}
+  .cmp__t{display:flex;align-items:baseline;gap:8px;font-size:15px;font-weight:400;margin:2px 4px 12px;letter-spacing:.06em;}
+  .cmp__t span{font-size:11px;color:#B4ADA4;letter-spacing:.04em;}
+  .note{font-size:12px;color:#A8554B;background:#FBF1EF;border:1px solid #F0D9D4;border-radius:10px;padding:10px 12px;margin:0 0 16px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>相册查看器 · 四主题预览</h1>
+  <p class="lead">
+    这是「首页相册大图预览 + 底部横滑缩略卡片」组件的四主题评审页。组件为<strong>纯新增</strong>（仓库原本没有大图查看器），
+    沿用项目现有 4 套 scene 主题（原初·清简 / 山野信笺 / 胶片叙忆 / 甜屿碎光），每套拥有独立卡片形态、边框、纹理、字体与装饰，并非简单换色。
+    下方「单主题预览」可左右滑动 / 点缩略图 / 用键盘 ← → 切换；「装饰」开关可一键回到干净视图。
+  </p>
+
+  <div class="toolbar">
+    <span class="lbl">切换主题：</span>
+    <button class="tbtn on" data-key="origin">原初·清简</button>
+    <button class="tbtn" data-key="forest">山野信笺</button>
+    <button class="tbtn" data-key="film">胶片叙忆</button>
+    <button class="tbtn" data-key="sweet">甜屿碎光</button>
+    <button class="tbtn deco on" id="decoBtn" style="margin-left:auto">装饰：开</button>
+  </div>
+
+  <div id="single"></div>
+
+  <p class="sec-title">四主题并排对比（静态，看气质差异）</p>
+  <div class="grid" id="grid"></div>
+
+  <p class="note" style="margin-top:28px">
+    说明：预览图为你本地生成的内置示例（仓库无图片资产）。真实接入后，组件读取相册分组照片，装饰随当前激活主题自动套用。
+  </p>
+</div>
+
+<script type="module">
+  import { pageViewer, mountViewer } from '../js/viewer.js';
+  import { tokens } from '../js/theme.js';
+
+  const SCENES = ['origin', 'forest', 'film', 'sweet'];
+  const NAMES = { origin: '原初·清简', forest: '山野信笺', film: '胶片叙忆', sweet: '甜屿碎光' };
+
+  function applyThemeTo(el, key) {
+    el.dataset.theme = key;
+    el.dataset.mode = 'light';
+    const tk = tokens(key, 'light');
+    for (const [k, v] of Object.entries(tk)) el.style.setProperty(k, v);
+  }
+
+  // —— 单主题可交互查看器 ——
+  const single = document.getElementById('single');
+  single.innerHTML = pageViewer({ state: { photos: [] }, param: '' });
+  const singleViewer = single.querySelector('.album-viewer');
+  applyThemeTo(singleViewer, 'origin');
+  mountViewer(singleViewer);
+
+  // —— 四主题并排 ——
+  const grid = document.getElementById('grid');
+  for (const key of SCENES) {
+    const sec = document.createElement('section');
+    sec.className = 'cmp';
+    sec.innerHTML = `<div class="cmp__t">${NAMES[key]}<span>${key}</span></div>` + pageViewer({ state: { photos: [] }, param: '' });
+    const viewer = sec.querySelector('.album-viewer');
+    applyThemeTo(viewer, key);
+    grid.appendChild(sec);
+  }
+
+  // —— 主题切换（仅作用于单主题预览）——
+  const tbtns = [...document.querySelectorAll('.tbtn[data-key]')];
+  tbtns.forEach((b) => {
+    b.addEventListener('click', () => {
+      applyThemeTo(singleViewer, b.dataset.key);
+      tbtns.forEach((x) => x.classList.toggle('on', x === b));
+    });
+  });
+
+  // —— 装饰开关（全局，影响所有实例）——
+  const decoBtn = document.getElementById('decoBtn');
+  decoBtn.addEventListener('click', () => {
+    const off = document.body.classList.toggle('album-deco-off');
+    decoBtn.textContent = off ? '装饰：关' : '装饰：开';
+    decoBtn.classList.toggle('on', !off);
+    document.querySelectorAll('[data-act="albumDeco"]').forEach((b) => b.setAttribute('aria-pressed', String(!off)));
+  });
+</script>
+</body>
+</html>

@@ -19,6 +19,7 @@ import { COPY } from './prompts.js';
 import { applyTheme, normalizeTheme, themeName } from './theme.js';
 import { resolveMode, MODE_LABEL } from './appearance.js';
 import { checkUpdate, performUpdate, snooze, markUpdated, detectApk, readSnooze } from './update.js';
+import { pageViewer, mountViewer } from './viewer.js';   // 相册大图查看器（四主题，纯新增）
 
 const view = () => document.getElementById('view');
 
@@ -35,6 +36,7 @@ const PAGES = {
   theme: P.pageTheme,            // V1.5 外观主题（方案 §5.4）
   settings: P.pageSettings,
   changelog: P.pageChangelog,   // 方案 §2.9.5 更新日志页
+  viewer: pageViewer,           // 相册大图查看器（四主题）
 };
 
 const TABS = ['create', 'gallery', 'recipes', 'settings'];
@@ -64,6 +66,7 @@ function render() {
   for (const b of document.querySelectorAll('.tab')) {
     b.classList.toggle('tab--on', b.dataset.tab === (TABS.includes(page) ? page : 'create'));
   }
+  if (page === 'viewer') mountViewer(view());   // 查看器自带滑动/点选，渲染后挂行为
   paintToast();
 }
 
@@ -218,6 +221,17 @@ document.addEventListener('click', async (e) => {
       case 'goAlbum': router.go('album'); break;
       case 'goGallery': router.go('gallery'); break;
       case 'goCreate': router.go('create'); break;   // 空状态引导回首页（方案 §5.3）
+      // 🔴 openViewer 同时服务两个入口：
+      //    ① 顶部【查看大图】按钮（无 data-id）→ 走全部可用照片
+      //    ② 分组卡片 .gcard（有 data-id + data-start）→ 打开该分组，并定位到封面照片
+      //    两个入参编码进同一个 param（'groupId:coverPhotoId'）：router.parseHash 只取
+      //    [page, param] 两段，第三段会被静默丢弃，改 router 属于全局改动、风险不值当。
+      case 'openViewer': {
+        const gid = el.dataset.id || '';
+        const start = el.dataset.start || '';
+        router.go('viewer', gid ? (start ? `${gid}:${start}` : gid) : '');
+        break;
+      }
 
       // 🔴 底部导航：必须自己把 data-tab 转成 hash 跳转。
       //    render() 里那段 tab--on 高亮只改 class，不负责导航 —— 没有这个 case
