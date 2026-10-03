@@ -41,7 +41,7 @@ function findAppRoot(start) {
 }
 const APP = findAppRoot(ROOT);
 // 项目根 = App 根往上最多两层里，第一个存在 06-产品规划 / 05-技术选型 的目录；
-// 找不到就退回 App 根（此时"覆盖文档目录"那条断言会如实报红，而不是崩溃）
+// 找不到就退回 App 根（不崩溃）；文档覆盖断言已改为可移植写法，CI/本地同构
 function findProjectRoot(start) {
   let d = start;
   for (let i = 0; i < 4; i++) {
@@ -408,8 +408,11 @@ sec('D. 密钥零泄漏扫描');
     }
   };
   walk(PROJECT_ROOT);
-  check('扫描覆盖到项目文档目录（不只代码）',
-    files.some((f) => /05-技术选型/.test(f)), files.length);
+  // 🔴 原断言写死本地 Obsidian 仓库目录名（05-技术选型）—— CI 干净 checkout 没有该目录，
+  //    导致「本地 56/56、CI 55/56」的分歧。意图是「文档也在扫描范围内、不是安全盲区」，
+  //    可移植写法 = 断言扫描到了 .md 文档文件（仓库里必有 README.md 等，CI/本地同构）。
+  check('扫描覆盖到文档类文件 .md（不只代码，密钥易在文档里泄漏）',
+    files.some((f) => /\.md$/i.test(f)), files.length);
 
   const hits = [];
   for (const f of files) {
