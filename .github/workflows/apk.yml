@@ -163,30 +163,20 @@ jobs:
           fi
           exit "$RC"
 
-      # 固定 keystore：签名不一致 = 无法覆盖安装 = WebView 里的本地数据全丢。
-      # 首次构建生成后 commit 回仓库固化（沿用词汇生长的做法）。
-      - name: Sign release with fixed keystore
-        if: env.BUILD_TYPE == 'release'
-        run: |
-          if [ ! -f android/zhenxuji-release.keystore ]; then
-            keytool -genkeypair -v -keystore android/zhenxuji-release.keystore -alias zhenxuji \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass zhenxuji1234 -keypass zhenxuji1234 \
-              -dname "CN=ZhenXuJi, O=SuBuJuan, C=CN"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add android/zhenxuji-release.keystore
-            git commit -m "chore: 固化 APK 签名密钥（保证覆盖安装签名一致）" || echo "nothing to commit"
-            git push || echo "push skipped"
-          fi
-
-      # 🔴 这里原先有一个「Sign release with fixed keystore」步骤：构建后若发现
-      #    没有 keystore 就现场 genkeypair，再 `git add` + `git commit` 把它固化进仓库。
-      #    v0.6.0 / v0.6.1 / v0.6.2 三代 CI 全红就是它——`git add android/...` 因
-      #    android/ 在 .gitignore 里而 exit 1，bash -e 直接把 job 打死；
-      #    而且现场生成的随机密钥本就不可能等于真签名密钥，"固化"从第一天就是无效的。
-      #    已删除，签名改为构建前从 secret 恢复（见上方 Restore fixed keystore 步骤）。
-      #    教训：**"把产物 commit 回仓库"这种自修改 CI，必须先确认该路径真的不被 gitignore。**
+      # 🔴 这里原先有一个「Sign release with fixed keystore」步骤（构建后若发现没有
+      #    keystore 就现场 genkeypair，再 `git add` + `git commit` 把它固化进仓库）。
+      #    v0.6.0 / v0.6.1 / v0.6.2 三代 CI 全红就是它，两个问题叠在一起：
+      #      ① `git add android/zhenxuji-release.keystore` 必然 exit 1 ——
+      #         android/ 在 .gitignore 里（既定设计：CI 每次重新生成 android 项目）。
+      #         它**不是**行尾 `|| echo` 能兜住的"nothing to commit"情形，
+      #         于是 `bash -e` 直接把整个 job 打死。
+      #      ② 更根本：该步骤排在 Build APK 之后，而 app/build.gradle 在**配置阶段**
+      #         就要读 android/keystore.properties。时机上永远来不及。
+      #         且现场 genkeypair 出的是**全新随机密钥**，不可能等于真签名密钥
+      #         → CI 包与历史版本签名不同 → 老用户覆盖安装必然失败。
+      #    已删除，签名改为**构建前**从 secret 恢复（见上方 "Restore fixed keystore"）。
+      #    教训：**"把产物 commit 回仓库"这类自修改 CI，必须先把该路径跟 .gitignore 对一遍；
+      #         且凡是构建要读的配置，其准备步骤必须排在构建之前。**
 
       - name: Rename & expose artifact
         run: |
