@@ -82,6 +82,65 @@ jobs:
       - name: Grant gradlew
         run: chmod +x android/gradlew
 
+      # 🔴 固定 keystore：签名不一致 = 无法覆盖安装 = WebView 里的本地数据全丢。
+      #
+      # 这一步必须在 **Build APK 之前**跑完，原因：
+      #   app/build.gradle 在 **配置阶段**就要读 android/keystore.properties，
+      #   文件不在 → release 构建直接报错退出。原先放在 build 之后，
+      #   逻辑上永远来不及（它只能在 APK 已经产出后才执行）。
+      #
+      # 历史事故（v0.6.0 / v0.6.1 / v0.6.2 连续三代 CI 全红，本地出包却全绿）：
+      #   原实现是「构建后若无 keystore 就现场 genkeypair，然后 git add 它」。
+      #   两个致命问题：
+      #     ① `git add android/zhenxuji-release.keystore` 必然失败并 exit 1 ——
+      #        android/ 在 .gitignore 里。它**不是** line 末尾 `|| echo` 能兜住的
+      #        "nothing to commit" 情形，于是 bash -e 直接把整个 job 打死。
+      #     ② 更根本：CI 现场生成的是一把**全新的随机密钥**，
+      #        它永远不可能等于本地那把真签名密钥 → CI 产出的 APK
+      #        与历史版本签名不同 → 老用户覆盖安装必然失败。
+      #        「固化 keystore」这个意图，靠"每次现场生成再 commit"是实现不了的。
+      #
+      # 正解：密钥作为 GitHub Secret 传入（base64 编码的 jks + 口令），
+      #       CI 只负责解码写盘、不负责生成。口令永不进仓库。
+      #   所需 Secret：KEYSTORE_B64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD
+      - name: Restore fixed keystore (before build)
+        if: env.BUILD_TYPE == 'release'
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error title=missing-keystore::未配置 KEYSTORE_B64 secret。"
+            echo "::error::release 构建必须用固定密钥签名，否则 CI 包无法覆盖安装历史版本。"
+            echo "::error::请在仓库 Settings → Secrets and variables → Actions 配置："
+            echo "::error::  KEYSTORE_B64        = base64 -w0 zhenxuji-release.jks"
+            echo "::error::  KEYSTORE_PASSWORD   = <storePassword>"
+            echo "::error::  KEY_ALIAS           = <alias>"
+            echo "::error::  KEY_PASSWORD        = <keyPassword>"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > android/zhenxuji-release.keystore
+          # 只写相对 android/ 的路径：build.gradle 用 rootProject.file() 解析，
+          # 绝对路径会在 runner 上指向 /home/runner/... 而失效。
+          cat > android/keystore.properties <<EOF
+          storeFile=zhenxuji-release.keystore
+          storePassword=${KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASSWORD}
+          EOF
+          # 自检：签名配置真的可读、密钥文件真的解出来了（避免又出现"构建成功但没签名"）
+          test -s android/zhenxuji-release.keystore || { echo "::error::keystore 解码为空"; exit 1; }
+          keytool -list -keystore android/zhenxuji-release.keystore \
+            -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1 \
+            || { echo "::error::keystore 口令或 alias 不匹配（检查 KEYSTORE_PASSWORD / KEY_ALIAS）"; exit 1; }
+          echo "keystore 就位，alias=${KEY_ALIAS}"
+          # 🔴 不能打印指纹以外的内容；只输出证书指纹供跨版本比对
+          keytool -list -v -keystore android/zhenxuji-release.keystore \
+            -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" 2>/dev/null \
+            | grep -E "SHA256:" | head -1 || true
+
       # 体积闸门：cap sync 不读 .gitignore，混入归档/依赖会把 APK 撑到几十 MB
       - name: Size gate (web assets <= 20MB)
         run: |
@@ -120,6 +179,14 @@ jobs:
             git commit -m "chore: 固化 APK 签名密钥（保证覆盖安装签名一致）" || echo "nothing to commit"
             git push || echo "push skipped"
           fi
+
+      # 🔴 这里原先有一个「Sign release with fixed keystore」步骤：构建后若发现
+      #    没有 keystore 就现场 genkeypair，再 `git add` + `git commit` 把它固化进仓库。
+      #    v0.6.0 / v0.6.1 / v0.6.2 三代 CI 全红就是它——`git add android/...` 因
+      #    android/ 在 .gitignore 里而 exit 1，bash -e 直接把 job 打死；
+      #    而且现场生成的随机密钥本就不可能等于真签名密钥，"固化"从第一天就是无效的。
+      #    已删除，签名改为构建前从 secret 恢复（见上方 Restore fixed keystore 步骤）。
+      #    教训：**"把产物 commit 回仓库"这种自修改 CI，必须先确认该路径真的不被 gitignore。**
 
       - name: Rename & expose artifact
         run: |
