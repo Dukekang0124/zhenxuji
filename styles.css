@@ -1334,3 +1334,50 @@ body.album-deco-off .album-tag--loc{display:none !important;}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms !important;transition-duration:.001ms !important}
 }
+
+/* ============================================================
+   AI 选片增量层（.pk-*）— 三级标记 / 相似组 / 大图标记栏
+   色值一律走 token，不硬编码主题色
+   ============================================================ */
+.pk-badge{display:inline-block;font-size:11px;line-height:1;padding:4px 8px;border-radius:999px;letter-spacing:.04em;white-space:nowrap;}
+.lv-keep{color:var(--brand);background:rgba(var(--mint-rgb),.28);}
+.lv-review{color:var(--ink-2);background:var(--privacy-bg);}
+.lv-trash{color:var(--alert);background:var(--privacy-bg);}
+
+.pk-chip{display:inline-block;font-size:10.5px;line-height:1;margin:4px 4px 0 0;padding:4px 7px;border-radius:var(--r-chip);color:var(--ink-2);background:var(--privacy-bg);letter-spacing:.02em;}
+
+.pk-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));}
+.pk-cell{display:flex;flex-direction:column;}
+.pk-cell .ph{margin-bottom:0;}
+.pk-cell__m{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px;}
+.pk-score{font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums;}
+.pk-cell .pk-chip{margin-top:2px;}
+
+/* 相似组 */
+.pk-sim{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px;box-shadow:var(--shadow);}
+.pk-sim__h{font-size:13px;color:var(--ink);letter-spacing:.04em;margin-bottom:10px;}
+.pk-sim__b{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:start;}
+@media (max-width:520px){.pk-sim__b{grid-template-columns:1fr;}}
+.pk-sim__best{border-right:1px solid var(--line);padding-right:12px;}
+@media (max-width:520px){.pk-sim__best{border-right:0;border-bottom:1px solid var(--line);padding-right:0;padding-bottom:12px;}}
+.pk-sim__best .btn{margin-top:8px;width:100%;}
+.pk-sim__rest{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;}
+
+/* 大图页标记栏：由 picker.js 追加到 .album-viewer 内，位于缩略条之上 */
+.pk-bar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin-top:12px;padding:10px 12px;
+  background:var(--card);border:1px solid var(--card-hairline);
+  border-radius:var(--r-sm);box-shadow:var(--shadow);
+}
+.pk-bar__t{font-size:12px;color:var(--ink-2);letter-spacing:.08em;}
+.pk-bar__lv{flex:1;min-width:0;font-size:11.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pk-btn{
+  appearance:none;cursor:pointer;font-size:12.5px;padding:7px 13px;border-radius:999px;
+  border:1px solid var(--card-hairline);background:var(--card);color:var(--ink);
+  transition:border-color .15s,background .15s;
+}
+.pk-btn--keep{border-color:var(--mint);color:var(--brand);}
+.pk-btn--trash{border-color:var(--alert);color:var(--alert);}
+.pk-btn--revert{border-style:dashed;color:var(--ink-2);}
+.pk-btn:active{background:var(--privacy-bg);}
