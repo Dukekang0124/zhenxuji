@@ -1,0 +1,9 @@
+# 帧叙集 CODEOWNERS —— Android 原生配置必须由负责人评审
+# 🔴 要让本文件真正"强制"（而不是仅请求 review），需在仓库 Settings →
+#    Branches → 保护 main 分支，并勾选 "Require review from Code Owners"。
+#    本文件 + 分支保护 = Android 改动无法被自动合并。
+
+/android/          @Dukekang0124
+*.gradle           @Dukekang0124
+gradlew            @Dukekang0124
+android.keystore.properties  @Dukekang0124

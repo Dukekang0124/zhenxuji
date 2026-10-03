@@ -1,0 +1,78 @@
+name: PR · Android 目录改动门禁
+
+# 触发：所有 PR（opened / 改 commit / reopened）。
+# 目的（决策文档 P0-3 + 分支规范）：任何修改 `android/` 目录**源码/配置**的 PR，
+#   ① 必须单独 PR（禁止与普通业务改动混入）；② 必须人工评审后才能合并（默认阻断本检查）。
+# 非 android/ 的 PR 直接放行，不增加任何负担。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  android-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 检出改动文件清单
+        id: detect
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          FILES=$(git diff --name-only "$BASE" "$HEAD" 2>/dev/null)
+          if [ -z "$FILES" ]; then
+            FILES=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}..HEAD" 2>/dev/null)
+          fi
+          echo "改动文件：" ; echo "$FILES"
+          # 🔴 基线/产物不算"配置改动"：build/、local.properties、keystore.properties、
+          #    *.jks、assets/public（cap copy 产物）即使出现在 diff 里也不触发门禁。
+          ANDROID_SRC=$(printf '%s\n' "$FILES" \
+            | grep '^android/' \
+            | grep -vE '/build/|local\.properties|keystore\.properties|\.jks$|assets/public/' \
+            | grep -c . || true)
+          NONANDROID=$(printf '%s\n' "$FILES" | grep -vc '^android/' || true)
+          echo "android_src=$ANDROID_SRC nonandroid=$NONANDROID"
+          echo "android_src=$ANDROID_SRC" >> "$GITHUB_OUTPUT"
+          echo "nonandroid=$NONANDROID" >> "$GITHUB_OUTPUT"
+
+      - name: Android 源码改动 → 标红 + 强制人工评审
+        if: steps.detect.outputs.android_src != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const androidSrc = Number('${{ steps.detect.outputs.android_src }}');
+            const nonandroid  = Number('${{ steps.detect.outputs.nonandroid }}');
+            const lines = [
+              '## ⚠️ Android 目录源码改动门禁',
+              '',
+              `本次 PR 修改了 \`android/\` 目录下的**源码/配置**文件（共 ${androidSrc} 个）。`,
+              '按项目分支规范（docs/DEVELOPMENT.md §Android 改动门禁），此类改动：',
+              '1. **必须单独 PR** —— 禁止与普通业务改动混入同一 PR；',
+              '2. **必须人工评审**后才能合并（本检查默认失败，请负责人 review 后手动 override）。',
+              '',
+            ];
+            if (nonandroid > 0) {
+              lines.push(`> 🔴 本 PR 同时含 ${nonandroid} 个非 android/ 文件，违反"单独 PR"规则，请拆分为独立 PR。`);
+            } else {
+              lines.push('> ✅ 本 PR 仅含 android/ 改动，符合"单独 PR"规则。');
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, body: lines.join('\n'),
+            });
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, labels: ['android-change'],
+            });
+            core.setFailed('Android 目录源码改动：需人工评审（见 PR 评论）。review 后 override 本检查再合并。');
+
+      - name: 无 android 源码改动 → 放行
+        if: steps.detect.outputs.android_src == '0'
+        run: echo "未改动 android/ 源码，门禁通过 ✓"
