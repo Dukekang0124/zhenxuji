@@ -1,8 +1,8 @@
 {
-  "latest_version": "0.6.0",
+  "latest_version": "0.6.1",
   "is_force": false,
   "update_url": "https://github.com/Dukekang0124/zhenxuji/releases/latest/download/zhenxuji-latest.apk",
-  "update_content": "这一版把「生成 AI 文案」和「检查版本更新」都接到了云端，你不用再去设置页填任何地址。手记里可以选让 AI 帮你写封面标题、配图短句和发朋友圈的正文；万一没网络或者它这次没答上来，会自动换成本地帮你写的文案，不会卡住你。设置页的检查更新也改成直接从云端读，点一下就知道有没有新版本。外观主题继续加厚：换一套主题时，底色、主色、字体、卡片形状、底部导航和导出的故事册会一起变。",
+  "update_content": "这一版把背后的写作模型从「一家」升级成了「四家接力」。你写手记时，系统会先请最会写的那个来写，如果它忙不过来、写不动或者一时连不上，就自动换下一位接着写，最后还有一位兜底。所以你几乎不会再遇到「AI 没答上来」的情况，出文案也更稳更快。这一版还顺手修好了「没网络时反而要多等十几秒」的问题——现在发现连不上就立刻改用本地文案，不再干等。",
   "update_time": "2026-10",
   "_howto": "update_url 支持两种写法：① 绝对地址，推荐 CI 自动产出的永久稳定地址 https://github.com/<owner>/<repo>/releases/latest/download/zhenxuji-latest.apk（每次发版自动指向最新包，不用改配置）；② 站点根相对路径 /apk/zhenxuji-latest.apk（端侧用「版本源自己的域名」补齐，同一份配置在 pages.dev / 自定义域名下都能用；走这条路要把包放到站点 /apk/ 下，且 _headers 已为 /apk/* 放开跨域）。留空时「检查更新」照常工作，只是点「立即更新」会明确提示暂时没有可用的下载地址。is_force 为 true 时 update_url 必填 —— 强制更新却没有下载地址会把用户卡死，构建期闸门会直接拦下。"
 }

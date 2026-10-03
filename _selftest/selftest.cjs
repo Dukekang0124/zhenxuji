@@ -1895,7 +1895,7 @@ async function makeFiles() {
     };
     await route.fulfill({
       status: 200, contentType: 'application/json',
-      body: JSON.stringify({ ok: true, content: '{"cover":"后端写的标题","captions":["一"],"body":"后端写的正文","hook":"后端写的钩子"}', model: 'mock', ms: 12 }),
+      body: JSON.stringify({ ok: true, content: '{"cover":"后端写的标题","captions":["一"],"body":"后端写的正文","hook":"后端写的钩子"}', model: 'mock-model-x', provider: 'mock-vendor', ms: 12 }),
     });
   });
   const e2e = await page.evaluate(async (tags) => {
@@ -1905,10 +1905,22 @@ async function makeFiles() {
     const local = await A.generateStory(tags, { aiTextEnabled: true }, { apiBase: '', storyId: 'n_same' });
     return { remote, localCover: local.data.cover };
   }, E2E_TAGS);
+  // 🔴 source 不再钉 'glm' 这个实现常量：后端已从单厂商扩到四家异构厂商
+  //    （OpenRouter / 商汤 / Agnes / 智谱），钉死某一个厂商名等于把断言焊死在实现上，
+  //    换厂商就要改测试 —— 那是测试在给代码上枷锁。
+  //    改为钉**行为契约**：① source 是 AI 生成（非 local）② 带回真实 model/provider
+  //    ③ 内容确实来自后端（与本地兜底对照不同）。
+  const AI_SOURCES = ['ai', 'glm', 'openrouter', 'sensenova', 'agnes', 'zhipu'];
   check('🔴 给了后端地址 → 真的走网络并采用返回内容（不再永远本地兜底）',
-    e2e.remote.ok === true && e2e.remote.source === 'glm'
+    e2e.remote.ok === true && AI_SOURCES.includes(e2e.remote.source)
     && e2e.remote.data.cover === '后端写的标题' && e2e.remote.data.cover !== e2e.localCover,
     [e2e.remote.source, e2e.remote.data && e2e.remote.data.cover, e2e.localCover]);
+  check('🔴 成功路径回传真实的 model 与 provider（四家异构后必须能答出「是谁生成的」）',
+    e2e.remote.model === 'mock-model-x' && e2e.remote.provider === 'mock-vendor',
+    { model: e2e.remote.model, provider: e2e.remote.provider });
+  check('source 绝不硬编码成某一家厂商名（换厂商不该需要改前端）',
+    !e2e.remote.source.startsWith('glm-') && e2e.remote.source !== 'zhipu',
+    e2e.remote.source);
   check('成功路径不显示任何降级提示（degraded 为空）', e2e.remote.degraded === '', e2e.remote.degraded);
   check('请求打到 /api/story，POST，且**不带任何鉴权头**（密钥只在服务端）',
     Boolean(storyHit) && storyHit.method === 'POST' && storyHit.auth === '', storyHit && { m: storyHit.method, auth: storyHit.auth });

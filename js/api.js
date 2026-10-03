@@ -113,10 +113,16 @@ export async function generateStory(tags, settings = {}, opts = {}) {
       const parsed = tolerantParse(r.text, 'story');
       if (parsed.ok) {
         regenCount.set(storyId, used + 1);
+        // 🔴 source 不再硬编码 'glm' —— 后端已从单厂商扩到四家异构
+        //    （OpenRouter / 商汤 / Agnes / 智谱），写死 'glm' 就是在对上层说谎。
+        //    统一用 'ai' 表示"模型生成"，具体是哪家看 provider/model 字段；
+        //    本地兜底仍是 'local'。上层只需判 source === 'local' 即可区分。
         push({ stage: 'story', ok: true, code: 'ok', ms: Date.now() - t0,
-               model: r.model || 'unknown', attempt: i, degraded: Boolean(r.degraded) });
+               model: r.model || 'unknown', provider: r.provider || '',
+               attempt: i, degraded: Boolean(r.degraded) });
         return {
-          ok: true, code: 'ok', source: 'glm', degraded: '',
+          ok: true, code: 'ok', source: 'ai', degraded: '',
+          model: r.model || '', provider: r.provider || '',
           ms: Date.now() - t0,
           data: normalizeStory(parsed.data, tags),
         };
@@ -154,7 +160,7 @@ async function callStoryService(url, tags, attempt) {
     if (!json.content) return { ok: false, code: 'model_empty' };
     return {
       ok: true, text: json.content, ms: json.ms ?? (Date.now() - t0),
-      model: json.model, degraded: json.degraded, tried: json.tried,
+      model: json.model, provider: json.provider, degraded: json.degraded, tried: json.tried,
     };
   } catch (e) {
     if (e?.name === 'AbortError') return { ok: false, code: 'network_timeout' };

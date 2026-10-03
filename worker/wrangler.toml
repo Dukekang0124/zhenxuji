@@ -1,0 +1,28 @@
+# 帧叙集 — GLM 代理 / 分享页 Worker
+#
+# 部署：
+#   cd worker
+#   npx wrangler kv namespace create SHARE         # 拿到 id 填到下面
+#   npx wrangler secret put GLM_KEY                # 智谱 API Key（不入库）
+#   npx wrangler deploy
+#
+# 已完成 2026-10-03：
+#   account_id = d24caa86ff464fd98e1c95a11c814a61（Kang7108558@163.com's Account）
+#   KV SHARE   = c952e2572af940ae881edebb00ffe19f
+#   密钥走 REST 写入（PUT /accounts/{account}/workers/scripts/{script_name}/secrets），
+#   与 `wrangler secret put` 等价但可脚本化、无需交互。
+#
+# 🔴 铁律（Sinoky 2026-09-28 两次实测事故）：KV 绑定属于 **non-inheritable keys**，
+#    只写在 Dashboard / 只用 API PATCH 的绑定，会被下一次 `wrangler deploy` 抹掉，
+#    表现为生产环境 env.SHARE === undefined、分享数据静默全丢，而线上无任何报错。
+#    必须写在本文件里。
+
+name = "zhenxuji-api"
+main = "index.js"
+compatibility_date = "2024-11-01"
+
+# 🔴 KV 绑定必须写在本文件里（non-inheritable keys：只写在 Dashboard / 只 PATCH 的绑定，
+#    会被下一次 `wrangler deploy` 抹掉 → 生产 env.SHARE === undefined，分享数据静默全丢）
+[[kv_namespaces]]
+binding = "SHARE"
+id = "c952e2572af940ae881edebb00ffe19f"

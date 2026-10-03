@@ -1,0 +1,11 @@
+{
+  "name": "zhenxuji-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@cloudflare/workerd-windows-64": "^1.20261003.1",
+    "@esbuild/win32-x64": "^0.28.2",
+    "wrangler": "^4.147.0"
+  }
+}
