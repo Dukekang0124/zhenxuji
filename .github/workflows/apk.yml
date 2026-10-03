@@ -351,6 +351,9 @@ jobs:
       #    早期试过 unzip+META-INF/*.RSA+openssl 路线，但 v2/v3 签名块里
       #    证书文件名无法用 glob 稳定取到 → openssl 路线放弃，apksigner 是权威源。
       - name: Verify APK fingerprint & signing cert
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           set +e
           APK=$(ls dist/*.apk | head -1)
