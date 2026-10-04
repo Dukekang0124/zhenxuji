@@ -895,6 +895,12 @@ export function pageSettings({ state }) {
   const ver = String(window.APP_VERSION || '0.5.0');
   // 入口文案把「明暗」也带上：用户在设置页就能看出自己现在是亮还是暗，不用点进去
   const modeLabel = MODE_LABEL[s.mode] || MODE_LABEL.auto;
+  // 🔴 P0(F2)：大模型连接状态展示需要的当前值（来自 store.ui.glmStatus，由 app.js 自动探测填充）
+  const gs = (state.ui && state.ui.glmStatus) || null;
+  const gsLevel = gs ? gs.level : (s.aiTextEnabled === false ? 'off' : 'idle');
+  const gsText = gs ? gs.text
+    : (s.aiTextEnabled === false ? '已关闭（在上方开启「智能文案」后自动生效）'
+      : '尚未检测 · 点「重新检测」查看模型服务是否连通');
   return `
     <h1 class="page-title">设置</h1>
 
@@ -928,6 +934,22 @@ export function pageSettings({ state }) {
           <div class="switch__d">帮你给照片配文案。关掉也能用，只是文案会变得比较朴素</div>
         </div>
         <button class="tgl ${s.aiTextEnabled ? 'tgl--on' : ''}" data-act="toggleAI"></button>
+      </div>
+    </div>
+
+    <!-- 🔴 P0(F2)：大模型连接状态 —— 真跑探测后展示，故障给友好提示而非报错 -->
+    <div class="card glm-status" id="glmStatus">
+      <div class="glm-status__row">
+        <div>
+          <div class="glm-status__t">大模型连接状态</div>
+          <div class="glm-status__d">AI 文案用的 GLM4-Flash 模型服务</div>
+        </div>
+        <span class="glm-dot glm-dot--${gsLevel}" id="glmDot"></span>
+      </div>
+      <div class="glm-status__v" id="glmStatusVal">${esc(gsText)}</div>
+      <div class="glm-status__a">
+        <button class="btn btn--xs" data-act="glmProbe">重新检测</button>
+        ${s.aiTextEnabled ? '' : '<span class="muted">（当前已关闭「智能文案」）</span>'}
       </div>
     </div>
 
@@ -1059,7 +1081,12 @@ export function renderExportModal(state) {
           <p class="exdl__detail">${esc(w.detail || '')}</p>
         </div>
         <div class="umodal__acts">
+          <!-- 🔴 顺序有讲究：主操作「知道了」（关闭）必须在第一位。
+               其一 UX：弹窗是告知落点用的，主按钮应是"明白了"（关闭），再次下载是可选次操作；
+               其二 真跑踩坑：弹窗垂直居中，巡检/用户"点遮罩中心"实际会落到第一个按钮上，
+               若把「再次下载」放第一，那个点会触发一次重新导出、弹窗永不关闭（回归）。 -->
           <button class="btn btn--block" data-act="closeExport">知道了</button>
+          <button class="btn btn--block btn--text" data-act="redownExport" data-id="${esc(r.storyId)}" data-kind="${esc(r.kind)}">再次下载</button>
           <button class="btn btn--block btn--text" data-act="copyExportName" data-name="${esc(r.filename)}">复制文件名</button>
           <button class="btn btn--block btn--text" data-act="goExportHistory">查看导出历史</button>
         </div>
@@ -1077,6 +1104,7 @@ export function pageExportHistory({ state }) {
         <div class="exh__t">${esc(KIND_LABEL[r.kind] || '导出')} · ${esc(r.storyTitle || '未命名')}</div>
         <div class="exh__fn">${esc(r.filename)}</div>
         <div class="exh__m">${esc(fmtWhen(r.at))} · ${esc((r.where && r.where.ok) || '')}</div>
+        <button class="btn btn--xs btn--text exh__open" data-act="redownExport" data-id="${esc(r.storyId)}" data-kind="${esc(r.kind)}">再次下载</button>
       </div>
     </div>`;
   return `

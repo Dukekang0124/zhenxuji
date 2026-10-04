@@ -14,7 +14,7 @@ import { pickPhotos } from './imaging.js';
 import { scanFiles, regroup } from './scan.js';
 import { extractTags, narrativeOrder, timeOrder } from './ai.js';
 import { generateStory, resetRegen } from './api.js';
-import { makeNineGrid, makeLongImage, buildShareHTML, downloadCanvas, downloadText } from './export.js';
+import { makeNineGrid, makeLongImage, buildShareHTML, downloadCanvas, downloadText, loadForExport } from './export.js';
 import { COPY } from './prompts.js';
 import { applyTheme, normalizeTheme, themeName } from './theme.js';
 import { resolveMode, MODE_LABEL } from './appearance.js';
@@ -123,7 +123,8 @@ store.subscribe((s) => {
   const ex = ui.exportResult;
   const k = (m ? `${m.isForce ? 'force' : 'optional'}:${(m.config && m.config.latestVersion) || ''}` : 'off')
     + '|' + String(ui.updateNote || '')
-    + '|' + (ex ? `${ex.kind}:${ex.filename}:${ex.at}` : 'off');   // 导出落点弹窗
+    + '|' + (ex ? `${ex.kind}:${ex.filename}:${ex.at}` : 'off')   // 导出落点弹窗
+    + '|' + (ui.glmStatus ? `${ui.glmStatus.level}:${ui.glmStatus.at}` : 'off');   // 🔴 P0(F2) 大模型状态变化也要重绘设置页
   if (k === lastModalKey) return;
   lastModalKey = k;
   render();
@@ -403,6 +404,8 @@ document.addEventListener('click', async (e) => {
         await doCheckUpdate(true);
         break;
 
+      case 'glmProbe': await probeGlm(); break;   // 🔴 P0(F2) 设置页「重新检测」大模型连接状态
+
       case 'snoozeUpdate':
         snooze();
         store.setUI({ updateModal: null });
@@ -641,6 +644,7 @@ document.addEventListener('click', async (e) => {
       case 'expGrid': await doExport(id, 'grid'); break;
       case 'expLong': await doExport(id, 'long'); break;
       case 'expH5': await doExport(id, 'h5'); break;
+      case 'redownExport': await doExport(el.dataset.id, el.dataset.kind || 'grid'); break;   // 导出弹窗/历史里「再次下载」
 
       case 'openStory': router.go('detail', id); break;
       case 'shareStory': router.go('share', id); break;
@@ -998,17 +1002,29 @@ async function doExport(storyId, kind) {
       const c = await makeNineGrid(xPhotos);
       const fn = `帧叙集-九宫格-${s.text?.cover || storyId}.jpg`;
       await downloadCanvas(c, fn);
-      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover });
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover, storyId: s.id });
     } else if (kind === 'long') {
       const c = await makeLongImage(xPhotos, s);
       const fn = `帧叙集-长图-${s.text?.cover || storyId}.jpg`;
       await downloadCanvas(c, fn);
-      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover });
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover, storyId: s.id });
     } else {
-      const html = buildShareHTML(s, xPhotos, s.templateId);
+      // 🔴 P0 修复（B4）：H5 网页故事册原本直接喂 xPhotos，buildShareHTML 只读
+      //    photo.thumbUrl（96px 缩略图）→ 导出的网页里图片糊成一团。
+      //    按"改数据不改 export.js 底层"纪律：把喂给 H5 的照片再包一层，
+      //    用 loadForExport 取 _file 全分辨率 canvas 转 dataURL（≥1080，远超 700 阈值），
+      //    不动 export.js 一行。无 _file 回落时保留原 thumbUrl，不阻断导出。
+      const h5Photos = await Promise.all(xPhotos.map(async (p) => {
+        try {
+          const { canvas } = await loadForExport(p, 1080);
+          if (canvas) return { ...p, thumbUrl: canvas.toDataURL('image/jpeg', 0.9) };
+        } catch (_) { /* 取原图失败，回落原缩略图 */ }
+        return p;
+      }));
+      const html = buildShareHTML(s, h5Photos, s.templateId);
       const fn = `帧叙集-${s.text?.cover || storyId}.html`;
       downloadText(html, fn);
-      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover });
+      rec = makeRecord({ kind, filename: fn, thumb: thumbOf(xPhotos[0]), storyTitle: s.text?.cover, storyId: s.id });
     }
     if (usedEnhanced) rec.usedEnhanced = true;
     // 🔴 toast → 模态弹窗（P0-Bug1 核心）：toast 一闪就没，路径信息留不住。
@@ -1016,6 +1032,38 @@ async function doExport(storyId, kind) {
   } catch (e) {
     console.error('[export]', e);
     store.toast('导出失败');
+  }
+}
+
+/**
+ * 🔴 P0 修复（F2）：设置页「大模型连接状态」实时探测 + 友好提示。
+ * 不编造"已连通"——真去打一次 generateStory，按 source 区分 ai / local 兜底；
+ * 本地兜底也如实说明"功能不受影响，只是文案由本地生成"。
+ */
+async function probeGlm() {
+  const st = store.get();
+  const s = st.settings || {};
+  const set = (o) => store.setUI({ glmStatus: { ...o, at: Date.now() } });
+  if (s.aiTextEnabled === false) {
+    set({ ok: false, level: 'off', text: '已关闭 · 开启「智能文案」后自动生效' });
+    return;
+  }
+  set({ ok: false, level: 'probe', text: '正在检测模型服务连接…' });
+  try {
+    const r = await generateStory(
+      { scene: '连接检测', count: 0, keywords: [], mood: '', place: '', dateText: '' },
+      s, { storyId: '__probe__', force: true }
+    );
+    if (r.source === 'ai') {
+      set({ ok: true, level: 'ok', text: `已连通 · 模型服务正常（${r.model || r.provider || 'AI'}，耗时 ${r.ms}ms）` });
+    } else {
+      const reason = r.code === 'provider_unconfigured' ? '未配置模型服务地址'
+        : r.code === 'provider_disabled' ? '智能文案已关闭'
+        : r.structural ? '模型服务不可用' : '模型未响应';
+      set({ ok: false, level: 'warn', text: `${reason} · 已自动用本地兜底文案（基础功能不受影响）` });
+    }
+  } catch (e) {
+    set({ ok: false, level: 'err', text: `检测失败：${String((e && e.message) || e)}` });
   }
 }
 
