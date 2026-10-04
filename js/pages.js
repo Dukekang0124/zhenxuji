@@ -1059,6 +1059,35 @@ export function renderUpdateModal(state) {
     </div>`;
 }
 
+/* ==================== 应用版本变更信息层（自动弹出 / 非强制） ==================== */
+
+/**
+ * 应用自身被更新后（新 APK / PWA 刷到新版本）自动展示「这次更新了什么」。
+ * 与 updateModal（有可更新版本）区分：这里没有"立即更新"按钮，只有「知道了 / 查看完整记录」，
+ * 因为本机已经是远端最新版，再点"更新"是没意义的。
+ * 🔴 文案必须走渲染（state.ui.updateInfoModal），不写死 DOM —— 与 updateModal 同一铁律。
+ */
+export function renderVersionInfoModal(state) {
+  const info = state.ui && state.ui.updateInfoModal;
+  if (!info) return '';
+  const cfg = info.config || {};
+  const to = String(info.current || cfg.latestVersion || '');
+  const from = String(info.from || '');
+  return `
+    <div class="umask" data-act="noopUpdateMask">
+      <div class="umodal" role="dialog" aria-modal="true">
+        <div class="umodal__t">已更新到 ${esc(to)} ✨</div>
+        <div class="umodal__b">
+          ${from ? `你已从 <b>${esc(from)}</b> 升级到 <b>${esc(to)}</b>。<br>` : ''}${esc(cfg.content || '这次主要是修了一些小问题，让用起来更顺手。')}
+        </div>
+        <div class="umodal__acts">
+          <button class="btn btn--block" data-act="closeVersionInfo">知道了</button>
+          <button class="btn btn--block btn--text" data-act="viewChangelog">查看完整记录</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 /* ==================== 导出落点弹窗 + 导出历史（P0-Bug1） ==================== */
 
 /**

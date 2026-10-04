@@ -2056,6 +2056,100 @@ async function makeFiles() {
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(SHOT, 'changelog.png'), fullPage: true });
 
+  /* ---- I6. 进入应用自动检测 + 应用版本变更自动弹（本次需求核心验收） ----
+     🔴 之前只有"点按钮才检查"的断言，没有"进入应用就自动弹"的断言 ——
+        这正是用户报的"版本更新后没自动弹"的根因盲区。必须真跑一遍证明：
+        ① 不点任何按钮，有新版本就自动弹更新弹窗；
+        ② 本机版本变了（升级到最新），自动弹"已更新到最新版"信息层；
+        ③ 首装（无记录）不弹版本变更信息层（避免首装就废话）。 */
+  sec('I6. 进入应用自动检测 / 应用版本变更自动弹');
+
+  const CUR_VER = await page.evaluate(() => String(window.APP_VERSION || '0.5.0'));
+
+  // 先把可能残留的弹窗/冷却记录清干净，保证断言只反映本次触发
+  await page.evaluate(async () => {
+    const s = await import('/js/store.js');
+    s.setUI({ updateModal: null, updateInfoModal: null, updateNote: '' });
+    try { localStorage.removeItem('zhenxuji.update.snoozeAt'); } catch (_) {}
+  });
+  await page.waitForTimeout(120);
+
+  // ① 有新版本 → 不点按钮，自动弹更新弹窗
+  await mock(BASE + '/version.json', 200, {
+    latest_version: '9.9.9', is_force: false, update_url: '/apk/z.apk',
+    update_content: '主题更好看了，顺手修了些小问题。', update_time: '2026-10',
+  });
+  const autoPopup = await page.evaluate(async () => {
+    const app = await import('/js/app.js');
+    await app.runStartupCheck();          // 直接驱动"进入应用时的自动检测"，不点任何按钮
+    await new Promise((r) => setTimeout(r, 250));
+    const m = document.querySelector('.umodal');
+    return {
+      modal: Boolean(m),
+      title: (m && m.querySelector('.umodal__t') || {}).textContent || '',
+    };
+  });
+  check('🔴 进入应用不点按钮，检测到新版本自动弹更新弹窗',
+    autoPopup.modal === true && /新版本/.test(autoPopup.title), autoPopup);
+  check('自动弹窗为非强制态（含「稍后提醒」出口）',
+    await page.evaluate(() => {
+      const acts = [...document.querySelectorAll('.umodal__acts .btn')].map((b) => b.textContent);
+      return acts.some((t) => t.includes('稍后提醒'));
+    }), autoPopup);
+  await page.evaluate(async () => {
+    const s = await import('/js/store.js');
+    s.setUI({ updateModal: null, updateInfoModal: null });
+  });
+  await page.unroute(BASE + '/version.json');
+
+  // ② 本机版本变了（升级到最新）→ 自动弹"已更新到最新版"信息层
+  await page.evaluate(() => { try { localStorage.setItem('zhenxuji.appVersion', '0.0.1'); } catch (_) {} });
+  await mock(BASE + '/version.json', 200, {
+    latest_version: CUR_VER, is_force: false, update_url: '',
+    update_content: '这次主要是修了一些小问题，让用起来更顺手。', update_time: '2026-10',
+  });
+  const verChanged = await page.evaluate(async (cur) => {
+    const app = await import('/js/app.js');
+    await app.runStartupCheck();
+    await new Promise((r) => setTimeout(r, 250));
+    const m = document.querySelector('.umodal');
+    return {
+      modal: Boolean(m),
+      title: (m && m.querySelector('.umodal__t') || {}).textContent || '',
+      body: (m && m.querySelector('.umodal__b') || {}).textContent || '',
+    };
+  }, CUR_VER);
+  check('🔴 应用版本变更（本机升级到最新）→ 自动弹"已更新到最新版"信息层',
+    verChanged.modal === true && /已更新到/.test(verChanged.title), verChanged);
+  check('信息层如实写出"你已从 0.0.1 升级到 <当前版本>"',
+    new RegExp(`你已从\\s*0\\.0\\.1\\s*升级到\\s*${CUR_VER.replace(/\./g, '\\.')}`).test(verChanged.body), verChanged);
+  check('信息层无「立即更新」按钮（本机已是最新，再更新无意义），含「知道了」',
+    await page.evaluate(() => {
+      const acts = [...document.querySelectorAll('.umodal__acts .btn')].map((b) => b.textContent);
+      return !acts.some((t) => t.includes('立即更新')) && acts.some((t) => t.includes('知道了'));
+    }), verChanged);
+  await page.evaluate(async () => {
+    const s = await import('/js/store.js');
+    s.setUI({ updateModal: null, updateInfoModal: null });
+  });
+  await page.unroute(BASE + '/version.json');
+
+  // ③ 首装（无记录）→ 不弹版本变更信息层
+  await page.evaluate(() => { try { localStorage.removeItem('zhenxuji.appVersion'); } catch (_) {} });
+  await mock(BASE + '/version.json', 200, {
+    latest_version: CUR_VER, is_force: false, update_url: '',
+    update_content: '这次主要是修了一些小问题，让用起来更顺手。', update_time: '2026-10',
+  });
+  const firstRun = await page.evaluate(async () => {
+    const app = await import('/js/app.js');
+    await app.runStartupCheck();
+    await new Promise((r) => setTimeout(r, 250));
+    return { modal: Boolean(document.querySelector('.umodal')) };
+  });
+  check('🔴 首装（无记录）不弹版本变更信息层（避免首装就废话）',
+    firstRun.modal === false, firstRun);
+  await page.unroute(BASE + '/version.json');
+
   await browser.close();
 
   /* ---------------- 汇总 ---------------- */

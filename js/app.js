@@ -18,7 +18,7 @@ import { makeNineGrid, makeLongImage, buildShareHTML, downloadCanvas, downloadTe
 import { COPY } from './prompts.js';
 import { applyTheme, normalizeTheme, themeName } from './theme.js';
 import { resolveMode, MODE_LABEL } from './appearance.js';
-import { checkUpdate, performUpdate, snooze, markUpdated, detectApk, readSnooze } from './update.js';
+import { checkUpdate, performUpdate, snooze, markUpdated, detectApk, readSnooze, detectAppVersionChange } from './update.js';
 import { pageViewer, mountViewer } from './viewer.js';   // 相册大图查看器（四主题，纯新增）
 import { makeRecord, pushRecord, canSaveToAlbum, KIND_LABEL, fmtWhen } from './exportdl.js';   // P0-Bug1 导出落点
 import { applyRecipeToPhoto, makeBundle, toExportPhotos, downscaleToDataURL } from './enhance.js';   // P1 真实调色
@@ -67,7 +67,7 @@ function render() {
   // .view 上跑着主题化进场动效（transform），会给 position:fixed 的弹窗造出包含块，
   // 动画没跑完时遮罩会只盖住 main 而露着顶栏/底栏。原因与取舍详见 index.html 的注释。
   const modalRoot = document.getElementById('modalRoot');
-  if (modalRoot) modalRoot.innerHTML = P.renderUpdateModal(state) + P.renderExportModal(state);
+  if (modalRoot) modalRoot.innerHTML = P.renderUpdateModal(state) + P.renderVersionInfoModal(state) + P.renderExportModal(state);
 
   for (const b of document.querySelectorAll('.tab')) {
     b.classList.toggle('tab--on', b.dataset.tab === (TABS.includes(page) ? page : 'create'));
@@ -121,10 +121,12 @@ store.subscribe((s) => {
   //    拍出来字节完全相同（md5 一致），等于"强制更新"那张照片是假的。
   //    （产品上这条路径很少走到，但证据假了比功能少更危险：它让人以为验过了。）
   const ex = ui.exportResult;
+  const info = ui.updateInfoModal;
   const k = (m ? `${m.isForce ? 'force' : 'optional'}:${(m.config && m.config.latestVersion) || ''}` : 'off')
     + '|' + String(ui.updateNote || '')
     + '|' + (ex ? `${ex.kind}:${ex.filename}:${ex.at}` : 'off')   // 导出落点弹窗
-    + '|' + (ui.glmStatus ? `${ui.glmStatus.level}:${ui.glmStatus.at}` : 'off');   // 🔴 P0(F2) 大模型状态变化也要重绘设置页
+    + '|' + (ui.glmStatus ? `${ui.glmStatus.level}:${ui.glmStatus.at}` : 'off')   // 🔴 P0(F2) 大模型状态变化也要重绘设置页
+    + '|' + (info ? `info:${(info.config && info.config.latestVersion) || ''}:${info.from || ''}:${info.current || ''}` : 'off');   // 🔴 应用版本变更信息层
   if (k === lastModalKey) return;
   lastModalKey = k;
   render();
@@ -401,7 +403,12 @@ document.addEventListener('click', async (e) => {
       /* ---- 版本更新（方案 §2.9） ---- */
       case 'checkUpdate':
         // 手动检查：不受 24h 冷却限制，失败必须给交代（方案 §2.9.3 / §2.9.6）
-        await doCheckUpdate(true);
+        await doCheckUpdate({ manual: true });
+        break;
+
+      case 'closeVersionInfo':
+        // 「已更新到最新版」信息层：点「知道了」关闭（非强制，不困住用户）
+        store.setUI({ updateInfoModal: null });
         break;
 
       case 'glmProbe': await probeGlm(); break;   // 🔴 P0(F2) 设置页「重新检测」大模型连接状态
@@ -413,8 +420,10 @@ document.addEventListener('click', async (e) => {
         break;
 
       case 'viewChangelog': {
-        const info = store.get().ui.updateModal || store.get().ui.updateInfo || {};
-        store.setUI({ updateModal: null, updateInfo: info });
+        const info = store.get().ui.updateModal
+          || store.get().ui.updateInfoModal
+          || store.get().ui.updateInfo || {};
+        store.setUI({ updateModal: null, updateInfoModal: null, updateInfo: info });
         router.go('changelog');
         break;
       }
@@ -1082,11 +1091,14 @@ function thumbOf(p) {
 /* ==================== 版本更新 ==================== */
 
 /**
- * 检查更新（手动/自动共用）。
- * @param {boolean} manual true=用户手动点（绕过冷却、失败要提示）
- * @param {boolean} silentAuto true=冷启动静默检测（超时不阻塞、失败不弹窗）
+ * 检查更新（手动/自动/版本变更共用）。
+ * @param {object} o
+ *   manual        true=用户手动点（绕过冷却、失败要提示）
+ *   silentAuto    true=冷启动静默检测（超时不阻塞、失败不弹窗）
+ *   versionChanged true=本机版本相对上次运行发生过变化（应用自身被更新过）
+ *   from          上次运行的版本号（versionChanged 时填充，用于"你已从 vX 升级到 vY"）
  */
-async function doCheckUpdate(manual = false, silentAuto = false) {
+async function doCheckUpdate({ manual = false, silentAuto = false, versionChanged = false, from = '' } = {}) {
   const st = store.get();
   // 🔴 兜底值必须是真实版本号。原来写 '0.0.0'，一旦 index.html 里的
   //    APP_VERSION 被误删，build-web.mjs 的四处校验又只看另外三处 →
@@ -1125,8 +1137,25 @@ async function doCheckUpdate(manual = false, silentAuto = false) {
     if (manual || r.isForce || !r.suppressed) {
       store.setUI({ updateModal: { config: r.config, isForce: r.isForce, inApk: r.inApk } });
     }
+  } else if (versionChanged && r.ok && r.config) {
+    // 🔴 应用版本变更（已自身更新到最新）→ 自动展示「这次更新了什么」，
+    //    无需用户手动检查（满足需求："应用版本变更时，自动触发更新弹窗并显示最新版本信息"）。
+    //    不走强制/可选更新弹窗（没有可更新的更新），只给一个"了解即可"的信息层。
+    //    远端就是最新版、无可更新项时走这里；若远端有更新的版本，上面 needUpdate 分支已抢占。
+    store.setUI({ updateInfoModal: { config: r.config, from, current } });
   }
   return r;
+}
+
+/**
+ * 进入应用时的自动检测入口（与 boot 同源逻辑，抽出供自测直接驱动）。
+ * 每次整页加载（=每次进入应用）由 boot 调一次；返回 Promise 便于测试 await。
+ */
+export async function runStartupCheck() {
+  // 🔴 用 localStorage 持久记录本机版本：跨刷新/跨会话都记得，
+  //    所以"应用自身被更新"这种事能被稳定识别 —— 这正是旧实现漏掉的。
+  const change = detectAppVersionChange(String(window.APP_VERSION || '0.5.0'));
+  return doCheckUpdate({ silentAuto: true, versionChanged: change.changed, from: change.from });
 }
 
 /* ==================== boot ==================== */
@@ -1150,14 +1179,17 @@ export function boot() {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
 
-  // 🔴 冷启动后台静默检测（方案 §2.9.1）：
-  //   setTimeout 推迟到首屏渲染之后 → 不阻塞首页加载；
-  //   全程静默（失败/超时不弹任何窗）→ 弱网离线无感。
-  //   注意：这里**只在冷启动跑一次**，切后台热启动不触发（方案硬约束）。
-  if (!sessionStorage.getItem('zhenxuji.update.bootDone')) {
-    sessionStorage.setItem('zhenxuji.update.bootDone', '1');
-    setTimeout(() => { doCheckUpdate(false, true).catch(() => {}); }, 2500);
+  // 🔴 进入应用即自动检测版本更新（方案 §2.9.1 + 本次需求"每次进入应用/版本变更自动弹"）：
+  //   - 旧实现用 sessionStorage 一次性门禁，它**跨刷新/跨版本切换照样存在**，
+  //     导致"版本更新后（必然伴随一次整页重载）检测不再跑 → 不弹"。
+  //   - 改为：boot 本身每次整页加载只跑一次，天然等于"每次进入应用"；
+  //     用模块级 bootRan 防重入（理论上一页只 boot 一次，双保险）。
+  //   - setTimeout 推迟到首屏渲染之后 → 不阻塞首页加载；全程静默（失败/超时不弹任何窗）。
+  if (!bootRan) {
+    bootRan = true;
+    setTimeout(() => { runStartupCheck().catch(() => {}); }, 2500);
   }
 }
 
+let bootRan = false;
 boot();
