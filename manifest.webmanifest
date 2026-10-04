@@ -2,7 +2,7 @@
   "name": "帧叙集",
   "short_name": "帧叙集",
   "description": "把一堆零散照片，整理成你的朋友圈生活故事",
-  "version": "0.6.2",
+  "version": "0.6.4",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

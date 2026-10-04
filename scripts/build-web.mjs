@@ -36,6 +36,11 @@ const EXCLUDE = new Set([
   // 🔴 它进工作区的方式是 `git rebase`（远端 auto_init 那次提交的 README），
   //    归类闸门挡是对的 —— 挡的不是"文件新出现"，而是"文档被当成了要上线的资产"。
   'README.md',
+  // 🔴 docs/ 同理：仓库文档 + 主题预览页（docs/album-theme-preview.html）。
+  //    它是 PR#1 随分支规范一起进来的，归类清单当时漏了它，
+  //    于是 `npm run build:web` / `npm run cap:sync` 在 main 上就直接抛错 ——
+  //    闸门本身是对的（未归类即失败），错的是清单没跟上。
+  'docs',
   // 🔴 functions/ = Cloudflare Pages Functions（/api/* 反代到 Worker）。
   //    它是**服务端代码**，只该进 Pages 部署包，**绝不进 www/**：
   //      ① 打进 APK 是纯浪费（用户下载用不到的服务端代码）；
@@ -46,6 +51,16 @@ const EXCLUDE = new Set([
   '_pages',
   // _pages_probe/ 是验证代理方案时的一次性目录，已废弃
   '_pages_probe',
+  // 🔴 assets/ 是**图标生成器的输入**（assets/icon/frame-glyph.png 字形位图 +
+  //    测量 JSON），由 scripts/extract-icon-glyph.py 从设计稿产出、入库。
+  //    它的产物是 icons/*.png（那才进包），源图本身不该被分发给用户 ——
+  //    既是体积浪费，也把「设计中间物」当成了 App 资产。
+  'assets',
+  // app-icon-proposals/ = 历代图标设计提案（多轮 AI 出图 + 对比板 + 矢量化尝试），
+  //    是**设计过程存档**，不是 App 资产。真正要留档的最终版已抄进 docs/。
+  'app-icon-proposals',
+  // concept-images/ = 产品概念图（主视觉 / 使用场景 / 核心功能），同样是设计存档。
+  'concept-images',
 ]);
 
 /* ── ① 归类断言 ────────────────────────────────────────────── */

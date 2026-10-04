@@ -26,6 +26,9 @@ const MANUAL_TIMEOUT_MS = 8000;
 
 const LS_SNOOZE = 'zhenxuji.update.snoozeAt';
 
+/** 记录用户**上次运行的本机版本号**（跨会话/刷新都留得住）。 */
+const LS_APP_VERSION = 'zhenxuji.appVersion';
+
 /* ==================== 版本源解析（P0-1 修复的核心） ==================== */
 
 /**
@@ -395,6 +398,43 @@ export function snooze() { writeSnooze(Date.now()); }
 
 /** 用户点了「立即更新」→ 清掉冷却记录（否则下次冷启动还会再拦一次没意义） */
 export function markUpdated() { clearSnooze(); }
+
+/* ==================== 本机版本追踪（应用版本变更检测） ==================== */
+
+/**
+ * 读取上次运行记录的本机版本号；无记录返回 ''。
+ * 用 localStorage 而非 sessionStorage —— 后者跨刷新/跨版本切换照样留得住，
+ * 这正是旧实现"版本更新后没再弹"的根因之一。
+ */
+export function readAppVersion() {
+  try { return String(localStorage.getItem(LS_APP_VERSION) || ''); } catch (_) { return ''; }
+}
+
+/** 写入本次运行的本机版本号（隐私模式抛错也不许崩） */
+export function writeAppVersion(v) {
+  try { localStorage.setItem(LS_APP_VERSION, String(v)); } catch (_) { /* 忽略 */ }
+}
+
+/**
+ * 判断**本机版本**是否相对上次运行发生了变化。
+ *
+ * 🔴 这是"应用版本变更时自动弹出版本信息"的核心判定：
+ *    - 首装（无记录）→ 不算变更，不弹（首装就弹"你已更新"是废话）。
+ *    - 上次 == 当前 → 没变，不弹。
+ *    - 上次存在且 != 当前 → 应用自身刚被更新（新 APK / PWA 刷到新版本）→ 视为变更。
+ *      同时**就地把记录更新成当前版本**，避免下次又误判成"又变了一次"。
+ *
+ * @param {string} current 当前 window.APP_VERSION
+ * @returns {{changed:boolean, from:string, to:string}}
+ */
+export function detectAppVersionChange(current) {
+  const last = readAppVersion();
+  const cur = String(current || '');
+  if (!last) { writeAppVersion(cur); return { changed: false, from: '', to: cur }; }
+  if (last === cur) return { changed: false, from: last, to: cur };
+  writeAppVersion(cur);
+  return { changed: true, from: last, to: cur };
+}
 
 /* ==================== 平台适配（方案 §2.9.7） ==================== */
 

@@ -100,11 +100,12 @@ export function canSaveToAlbum() {
 
 const MAX_HISTORY = 30;
 
-export function makeRecord({ kind, filename, thumb, storyTitle }) {
+export function makeRecord({ kind, filename, thumb, storyTitle, storyId }) {
   return {
     id: `ex_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e4).toString(36)}`,
     kind,                 // 'grid' | 'long' | 'h5'
     filename,
+    storyId: storyId || '',   // 🔴 P0(C5)：历史/弹窗「再次下载」凭它找回原作品重导出
     storyTitle: storyTitle || '未命名作品',
     thumb: thumb || '',   // 缩略图（dataURL，不持久化到 localStorage 会被剥离字段剥离）
     at: Date.now(),

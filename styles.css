@@ -1361,6 +1361,52 @@ body.album-deco-off .album-tag--loc{display:none !important;}
 }
 .vchip__a{font-size:12px;color:var(--ink-2);line-height:1}
 
+/* ==================== 配方管理 / 成套绑定 / 调色预览（P1） ==================== */
+/* 配方卡的预览图：显示"套用本配方后的真实调色效果"（dataURL，跨会话有效） */
+.rcard__prev{
+  width:100%;height:84px;border-radius:8px;
+  background:var(--paper) center/cover no-repeat;
+  border:1px solid var(--line);
+}
+
+.rcard__acts{display:flex;flex-wrap:wrap;gap:6px;padding-top:8px;border-top:1px dashed var(--line)}
+.rbtn{
+  font-size:12px;line-height:1.6;color:var(--ink-2);
+  padding:3px 10px;border-radius:999px;
+  background:transparent;border:1px solid var(--line);
+  cursor:pointer;transition:border-color .16s ease,color .16s ease;
+}
+.rbtn:hover{border-color:var(--mint);color:var(--mint)}
+.rbtn--danger:hover{border-color:var(--alert);color:var(--alert)}
+.rbtn--off{opacity:.45;cursor:not-allowed}
+.rbtn--off:hover{border-color:var(--line);color:var(--ink-2)}
+
+.bundle{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.bundle:last-child{border-bottom:none}
+.bundle__b{flex:1 1 auto;min-width:0}
+.bundle__n{font-size:13.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bundle__m{font-size:11.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- 调色参数滑杆 ----
+   🔴 为什么用原生 input[type=range] 而不自己画：
+      原生控件自带键盘操作（方向键微调）、无障碍属性、系统级高对比度适配。
+      自己画 div+drag 的版本这四样全没有，且触屏拖动手感还不如原生。
+   accent-color 让滑杆的已填充段跟随主题色，四套主题自动适配，不需要为每个主题各写一份。 */
+.sliders{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:10px 14px;margin:12px 0 14px;
+}
+.sld{min-width:0}
+.sld__top{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:2px}
+.sld__l{font-size:12px;color:var(--ink-2);letter-spacing:.04em}
+.sld__v{font-size:12px;color:var(--brand);font-variant-numeric:tabular-nums}
+.sld__r{
+  width:100%;height:22px;margin:0;
+  accent-color:var(--mint);
+  background:transparent;
+}
+.sld__h{font-size:11px;color:var(--ink-2);opacity:.75;margin-top:1px}
+
 /* ==================== 素材配方卡（P0-Bug2：JSON 溢出修复） ====================
    🔴 这段的布局纪律：纵向 flex + min-width:0 + flex-wrap:wrap。
       原来的 `.row--between` 是横向排列且不换行，长文本必然溢出卡片 ——
@@ -1432,3 +1478,90 @@ body.album-deco-off .album-tag--loc{display:none !important;}
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms !important;transition-duration:.001ms !important}
 }
+
+/* ============================================================
+   AI 选片增量层（.pk-*）— 三级标记 / 相似组 / 大图标记栏
+   色值一律走 token，不硬编码主题色
+   ============================================================ */
+.pk-badge{display:inline-block;font-size:11px;line-height:1;padding:4px 8px;border-radius:999px;letter-spacing:.04em;white-space:nowrap;}
+.lv-keep{color:var(--brand);background:rgba(var(--mint-rgb),.28);}
+.lv-review{color:var(--ink-2);background:var(--privacy-bg);}
+.lv-trash{color:var(--alert);background:var(--privacy-bg);}
+
+.pk-chip{display:inline-block;font-size:10.5px;line-height:1;margin:4px 4px 0 0;padding:4px 7px;border-radius:var(--r-chip);color:var(--ink-2);background:var(--privacy-bg);letter-spacing:.02em;}
+
+.pk-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));}
+.pk-cell{display:flex;flex-direction:column;}
+.pk-cell .ph{margin-bottom:0;}
+.pk-cell__m{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:6px;}
+.pk-score{font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums;}
+.pk-cell .pk-chip{margin-top:2px;}
+
+/* 相似组 */
+.pk-sim{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px;box-shadow:var(--shadow);}
+.pk-sim__h{font-size:13px;color:var(--ink);letter-spacing:.04em;margin-bottom:10px;}
+.pk-sim__b{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:start;}
+@media (max-width:520px){.pk-sim__b{grid-template-columns:1fr;}}
+.pk-sim__best{border-right:1px solid var(--line);padding-right:12px;}
+@media (max-width:520px){.pk-sim__best{border-right:0;border-bottom:1px solid var(--line);padding-right:0;padding-bottom:12px;}}
+.pk-sim__best .btn{margin-top:8px;width:100%;}
+.pk-sim__rest{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;}
+
+/* 大图页标记栏：由 picker.js 追加到 .album-viewer 内，位于缩略条之上 */
+.pk-bar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin-top:12px;padding:10px 12px;
+  background:var(--card);border:1px solid var(--card-hairline);
+  border-radius:var(--r-sm);box-shadow:var(--shadow);
+}
+.pk-bar__t{font-size:12px;color:var(--ink-2);letter-spacing:.08em;}
+.pk-bar__lv{flex:1;min-width:0;font-size:11.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pk-btn{
+  appearance:none;cursor:pointer;font-size:12.5px;padding:7px 13px;border-radius:999px;
+  border:1px solid var(--card-hairline);background:var(--card);color:var(--ink);
+  transition:border-color .15s,background .15s;
+}
+.pk-btn--keep{border-color:var(--mint);color:var(--brand);}
+.pk-btn--trash{border-color:var(--alert);color:var(--alert);}
+.pk-btn--revert{border-style:dashed;color:var(--ink-2);}
+.pk-btn:active{background:var(--privacy-bg);}
+
+/* ==================== 帮助页（P1：完整链路教程 + 能力边界） ==================== */
+.help__stat{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--ink-2)}
+.help__stat strong{color:var(--brand);font-weight:600}
+
+.help__ol{list-style:none;margin:0;padding:0;counter-reset:none}
+.help__step{display:flex;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.help__step:last-child{border-bottom:none}
+.help__n{
+  flex:0 0 auto;width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:var(--mint);border:1px solid var(--mint);
+}
+.help__b{flex:1 1 auto;min-width:0}
+.help__t{font-size:14px;color:var(--ink);display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.help__tag{
+  font-size:11px;line-height:1.7;color:var(--ink-2);
+  padding:0 7px;border-radius:999px;border:1px solid var(--line);
+}
+.help__d{font-size:12.5px;line-height:1.75;color:var(--ink-2);margin-top:3px}
+
+.help__ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.85;color:var(--ink-2)}
+.help__ul li{margin-bottom:5px}
+.help__ul strong{color:var(--ink);font-weight:600}
+.help__ul--warn li:last-child{margin-bottom:0}
+
+/* 🔴 P0(F2) 设置页「大模型连接状态」卡片 */
+.glm-status__row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.glm-status__t{font-weight:600;color:var(--ink);font-size:14px}
+.glm-status__d{font-size:12px;color:var(--ink-2);margin-top:3px}
+.glm-status__v{font-size:13px;line-height:1.55;color:var(--ink);margin-top:10px;word-break:break-word}
+.glm-status__a{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.glm-dot{width:10px;height:10px;border-radius:50%;background:#bbb;flex:0 0 auto}
+.glm-dot--ok{background:#3a9d6e}
+.glm-dot--warn{background:#d99b2b}
+.glm-dot--err{background:#d9534f}
+.glm-dot--off{background:#9a9a9a}
+.glm-dot--idle{background:#bbb}
+.glm-dot--probe{background:#4a90d9;animation:glm-pulse 1s ease-in-out infinite}
+@keyframes glm-pulse{0%,100%{opacity:1}50%{opacity:.35}}

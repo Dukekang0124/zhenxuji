@@ -99,8 +99,11 @@ function fmtTime(p) {
    Map 而非 WeakMap：key 是字符串 id，WeakMap 用不了。 */
 const urlCache = new Map();
 function srcOf(p) {
-  // 🔴 优先级必须是 _file（原图，全分辨率）> thumbUrl（仅 96px 缩略图）。
-  //    thumbSize 默认 96，直接拿 thumbUrl 当"大图"会糊成一团。
+  // 🔴 优先级必须是 _file（原图，全分辨率）> thumbUrl（缩略图）。
+  //    直接拿 thumbUrl 当"大图"会糊成一团。
+  //    ⚠️ 这段话曾长期是"写了但拿不到"：scan.js 的 processOne 早期**不挂 _file**，
+  //       于是这里永远走 thumbUrl 分支 —— 注释承诺原图、行为给缩略图。
+  //       已在 scan.js 挂上 _file 修复（见 P0 图片画质专项）。此处注释保留为排查索引。
   if (p._file) {
     let u = urlCache.get(p.id);
     if (!u) { u = URL.createObjectURL(p._file); urlCache.set(p.id, u); }

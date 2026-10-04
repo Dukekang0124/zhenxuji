@@ -16,20 +16,78 @@
 /**
  * 配方参数的中文标签与展示规则。
  *
- * 🔴 键名与取值域**实测抄自 js/imaging.js 的 applyAdjust() 预设表**，
+ * 🔴 键名与取值域**实测抄自 js/imaging.js 的 enhance() 预设表**，
  *    现有配方只含这 5 个键：bright / soft / warm / sat / contrast。
- *    （第一版这里多写了 grain/fade/sharpen 三个 —— 那三个 applyAdjust 根本不认，
+ *    （第一版这里多写了 grain/fade/sharpen 三个 —— enhance() 根本不认，
  *     写进标签就是"界面承诺了一个实际不生效的效果"，比显示 JSON 更糟，是骗人。）
  *    将来 imaging 新增参数时，在此补一条即可；未知键走 paramTags 的兜底分支，
  *    会原样显示键名（不静默吞掉），自测里有"标签覆盖率"断言守住这一点。
+ *
+ * ⚠️ 勘误（2026-10-03）：本注释原先写的是「applyAdjust()」—— **那个函数不存在**，
+ *    真实函数名是 enhance(src, scene, recipe)。注释里写错函数名比不写更糟：
+ *    下一个人按注释去 grep applyAdjust 会一无所获，还会怀疑自己。
  */
 export const PARAM_META = {
-  bright:   { label: '亮度', step: 1,   hint: '整体提亮或压暗' },
-  contrast: { label: '对比', step: 1,   hint: '明暗反差' },
-  sat:      { label: '饱和', step: 1,   hint: '颜色浓淡' },
-  warm:     { label: '色温', step: 1,   hint: '偏暖或偏冷' },
-  soft:     { label: '柔化', step: 0.1, hint: '磨皮柔焦程度' },
+  bright:   { label: '亮度', step: 1,   min: -60, max: 60,    hint: '整体提亮或压暗' },
+  contrast: { label: '对比', step: 1,   min: -60, max: 60,    hint: '明暗反差' },
+  sat:      { label: '饱和', step: 1,   min: -100, max: 100, hint: '颜色浓淡' },
+  warm:     { label: '色温', step: 1,   min: -40, max: 40,    hint: '偏暖或偏冷' },
+  soft:     { label: '柔化', step: 0.1, min: 0,   max: 1,     hint: '磨皮柔焦程度' },
 };
+
+/**
+ * 🔴 取值域（min/max）是**滑杆能用、标签能自测**的唯一依据。
+ *
+ * 为什么不写在 pages.js 里：滑杆的 min/max、参数表的显示、自测的范围断言
+ * 三处都要用。分头写必漂移 —— 漂移的后果是「滑杆能拖到 imaging 不认的范围」，
+ * 用户拖完发现没反应，又变回"界面承诺了一个不生效的效果"。
+ *
+ * 区间依据（来自 imaging.js 的实际算法，不是拍脑袋）：
+ *   - bright   ±60   超过 ±60 时大半像素直接撞到 0/255，纯属浪费操作空间
+ *   - contrast ±60   同上；contrast 公式在 |v|→255 时分母趋 0，不能再放大
+ *   - sat      ±100  sf = 1 + sat/100，取 -100 恰好全灰（真实存在，不是越界）
+ *   - warm     ±40   r += warm; b -= warm*0.6，-40 已让蓝通道普遍负值截断
+ *   - soft     0~1    imaging 里 soft > 0.02 就生效，1 已接近满强度糊
+ *
+ * ⚠️ 这里给的是**算法安全区**，不是"建议美学区"。建议值在 SCENE_PRESET 里。
+ */
+export const PARAM_KEYS = ['bright', 'sat', 'contrast', 'warm', 'soft'];
+
+/**
+ * 按场景的默认参数 —— 直接抄自 imaging.js enhance() 里的 base 表。
+ *
+ * 🔴 为什么抄而不是导出：imaging.js 是导出层（九宫格/长图都在用），
+ *    改它的导出面等于动到底层渲染，与"禁止修改 export.js"是同一类约束。
+ *    抄一份的风险是「以后 imaging 改了 base 表这里忘了同步」——
+ *    所以自测里有一条断言会比对两者是否一致，不一致就红。
+ */
+export const SCENE_PRESET = {
+  portrait:  { bright: 6,  soft: 0.35, warm: 8,  sat: 4,  contrast: 4 },
+  landscape: { bright: 2,  soft: 0,    warm: 2,  sat: 12, contrast: 10 },
+  food:      { bright: 8,  soft: 0.1,  warm: 12, sat: 14, contrast: 6 },
+  other:     { bright: 4,  soft: 0.1,  warm: 4,  sat: 6,  contrast: 5 },
+};
+
+/** 把任意来源的参数补齐成完整的 5 键（缺项取 0，而不是取场景默认） */
+export function normalizeParams(params) {
+  const p = params && typeof params === 'object' ? params : {};
+  const out = {};
+  for (const k of PARAM_KEYS) {
+    const n = Number(p[k]);
+    out[k] = Number.isFinite(n) ? n : 0;
+  }
+  return out;
+}
+
+/** 把参数夹到安全区内（滑杆拖动、导入老存档都靠它兜底） */
+export function clampParams(params) {
+  const p = normalizeParams(params);
+  for (const k of PARAM_KEYS) {
+    const m = PARAM_META[k];
+    p[k] = Math.min(m.max, Math.max(m.min, p[k]));
+  }
+  return p;
+}
 
 /**
  * 🔴 取舍：**排序按"用户最常调"，不按对象键顺序**。

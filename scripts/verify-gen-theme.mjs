@@ -183,10 +183,34 @@ if (b < 0 || e < b) {
   const actual = cssText.slice(b, e + CSS_END.length);
   if (actual !== expectCss) cssProblems.push('styles.css 主题区 ≠ 配置生成结果（改了 packs.json 没跑 npm run gen:theme）');
 }
-const cssBlockCount = (cssText.match(/\[data-theme='/g) || []).length;
+/* 🔴 2026-10-04 修正：这里的正则原来只写 `/\[data-theme='/`，于是把
+   `[data-theme='forest'] .album-texture{…}` 这类**主题专属组件规则**
+   也数成了"主题块"。9f709fd（相册大图预览 viewer）一口气加了 18 条这种
+   规则，计数就从 16 涨到 34 —— 闸门开始报 FAIL，而它真正要防的那件事
+   （主题被手写块悄悄覆盖）一次都没发生：紧邻上面的 sentinel 区逐字节比对
+   是过的，16 个 token 块也一个不差。
+
+   危害在于**闸门被误报废掉**：一旦有人习惯性忽略这条 FAIL，真正的漂移
+   就再也没人看见。而且它是 CI 出包的前置闸门 —— 误报等于发版被堵死
+   （实测：d449c090 那次 APK 构建成功时还没有 9f709fd，之后工作流再没跑过）。
+
+   修法：只匹配**真正开启一个主题 token 块**的选择器 ——
+     `[data-theme='x']{`                       亮色 token 块
+     `[data-theme='x'][data-mode='dark']{`     暗色 token 块
+   后面跟着 ` .class{` 的组件规则不再计入。保护没有丢：裸写在 sentinel 区
+   外的主题块仍会被数到（17 ≠ 16 照样拦），鉴别力见下方自检。 */
+const cssBlockCount = (cssText.match(/\[data-theme='[^']+'\](?:\[data-mode='dark'\])?\{/g) || []).length;
 const wantBlockCount = rawPacks.packs.length * 2;
 if (cssBlockCount !== wantBlockCount) {
   cssProblems.push(`styles.css 主题块 ${cssBlockCount} 段 ≠ 期望 ${wantBlockCount} 段（${rawPacks.packs.length} 套 × 亮暗）`);
+}
+/* 🔴 仪器自检（鉴别力）：旧正则的行为必须与预期一致 —— 数"组件规则"时虚高，
+   数"token 块"时准确。若哪天有人把正则改回去，这条会把事实摆出来。 */
+const PROBE = `[data-theme='origin']{--paper:#fff}\n[data-theme='forest'] .album-texture{display:block}`;
+const probeTight = (PROBE.match(/\[data-theme='[^']+'\](?:\[data-mode='dark'\])?\{/g) || []).length;
+const probeLoose = (PROBE.match(/\[data-theme='/g) || []).length;
+if (probeTight !== 1 || probeLoose !== 2) {
+  cssProblems.push(`计数正则鉴别力异常：探针里 1 个 token 块 + 1 条组件规则，紧正则应得 1、宽正则应得 2，实测 ${probeTight}/${probeLoose}`);
 }
 const iRoot = cssText.indexOf('\n:root{');
 const iFirst = cssText.indexOf("\n[data-theme='");

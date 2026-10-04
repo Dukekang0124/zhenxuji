@@ -180,7 +180,7 @@ export function parseExifDate(str) {
  * 解码单张照片 → 分析像素 + 缩略图 + EXIF。
  * 解码后立即 close bitmap，避免上万张时内存爆掉。
  */
-export async function decodePhoto(file, thumbSize = 96) {
+export async function decodePhoto(file, thumbSize = 256) {
   const bmp = await createImageBitmap(file);
   try {
     const { width: w, height: h } = bmp;
@@ -214,8 +214,43 @@ function drawTo(bmp, w, h) {
   return c;
 }
 
+/**
+ * 缩略图画布 → 可持久化 dataURL。
+ *
+ * 🔴 质量从 0.72 提到 0.82（P0 图片画质专项）：0.72 在 96px 小图上不明显，
+ *    但缩略图边长提到 256 后，低质量会在人像脸部/风景细节处压出可见块状噪点。
+ */
 export function canvasToURL(canvas) {
-  return canvas.toDataURL('image/jpeg', 0.72);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
+/* ==================== 原图显示源（大图预览用） ====================
+ *
+ * 🔴 P0 图片画质专项（根因修复的一部分）：
+ *    页面里"全宽大图"（作品详情页）此前直接渲染 p.thumbUrl（缩略图），
+ *    被拉伸到整屏 → 肉眼可见马赛克/糊。用户要的是"屏幕用适配预览、底层留原图"。
+ *    这里给出**会话内**的原图显示源（blobURL），按 id 缓存，避免每次渲染新建 URL。
+ *
+ *   - 有 `_file`（原图句柄，导入后会话内一直在）→ 原图 blobURL，全分辨率；
+ *   - 无 `_file`（重启后，句柄本来就不落盘）→ 回落 thumbUrl，如实降级。
+ * 绝不在此修改/压缩原文件；blobURL 只是引用。
+ */
+const _displayCache = new Map(); // photoId -> blobURL
+
+export function displaySrc(p) {
+  if (!p) return '';
+  if (p._file) {
+    let u = _displayCache.get(p.id);
+    if (!u) { try { u = URL.createObjectURL(p._file); _displayCache.set(p.id, u); } catch (_) { u = ''; } }
+    if (u) return u;
+  }
+  return p.thumbUrl || '';
+}
+
+/** 释放显示源缓存（清空数据 / 重置时调用，防 blobURL 泄漏） */
+export function clearDisplaySrc() {
+  for (const u of _displayCache.values()) { try { URL.revokeObjectURL(u); } catch (_) { /* 忽略 */ } }
+  _displayCache.clear();
 }
 
 /** 稳定 id：名字+大小+时间，同一张照片重复导入不会重复入库 */
