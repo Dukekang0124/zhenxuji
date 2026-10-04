@@ -14,12 +14,15 @@
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
-<script>window.APP_VERSION = '0.6.2';</script>
+<script>window.APP_VERSION = '0.6.3';</script>
 
 <header class="topbar" id="topbar">
   <div class="brand">
     <!-- Logo：翻开的册页 + 柔和时间轴 + 帧点（纤细圆角单线，无直角无粗线）
-         与 icons/logo-mini.svg、桌面图标同源，改图形必须走 scripts/gen-icons.mjs。
+         与 icons/logo-mini.svg 同源 —— 改这个图形**两边必须一起改**（自测 L5 逐条比对 path 的 d）。
+         ⚠️ 0.6.3 起它与**桌面图标不再同源**，这是有意分叉而非漏改：
+            桌面图标已换成康哥定稿的「帧」字标，而页头只有 24px ——
+            11 画的汉字缩到这个尺寸会糊成一团，单线册页在这里可读性明显更好。
          ⚠️ 这里保持内联 SVG（不是 <img>）：.brand__mark 靠 color 继承 currentColor，
             且自测会取 .brand__mark svg path 的 stroke 校验品牌色。 -->
     <span class="brand__mark" aria-hidden="true">

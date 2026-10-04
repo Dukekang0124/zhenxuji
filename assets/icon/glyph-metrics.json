@@ -1,0 +1,40 @@
+{
+  "_pipeline": "scripts/extract-icon-glyph.py  →  scripts/gen-icons.mjs",
+  "_source_copy": "assets/icon/source-design-1280.jpg",
+  "source_sha256": "0e889ffaf388aa407c5c9aa0e478d174cc96b1fea811a2389c7f47dc9b7fb3a9",
+  "source": "assets/icon/source-design-1280.jpg",
+  "source_size": [
+    1280,
+    1280
+  ],
+  "bg": [
+    254,
+    255,
+    250
+  ],
+  "c_black": [
+    24,
+    20,
+    16
+  ],
+  "c_terra": [
+    219,
+    165,
+    139
+  ],
+  "bbox": [
+    231,
+    280,
+    1059,
+    997
+  ],
+  "glyph_native": [
+    828,
+    717
+  ],
+  "aspect": 1.15481,
+  "output": [
+    828,
+    717
+  ]
+}

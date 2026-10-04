@@ -51,6 +51,16 @@ const EXCLUDE = new Set([
   '_pages',
   // _pages_probe/ 是验证代理方案时的一次性目录，已废弃
   '_pages_probe',
+  // 🔴 assets/ 是**图标生成器的输入**（assets/icon/frame-glyph.png 字形位图 +
+  //    测量 JSON），由 scripts/extract-icon-glyph.py 从设计稿产出、入库。
+  //    它的产物是 icons/*.png（那才进包），源图本身不该被分发给用户 ——
+  //    既是体积浪费，也把「设计中间物」当成了 App 资产。
+  'assets',
+  // app-icon-proposals/ = 历代图标设计提案（多轮 AI 出图 + 对比板 + 矢量化尝试），
+  //    是**设计过程存档**，不是 App 资产。真正要留档的最终版已抄进 docs/。
+  'app-icon-proposals',
+  // concept-images/ = 产品概念图（主视觉 / 使用场景 / 核心功能），同样是设计存档。
+  'concept-images',
 ]);
 
 /* ── ① 归类断言 ────────────────────────────────────────────── */

@@ -1,8 +1,8 @@
 {
-  "latest_version": "0.6.2",
+  "latest_version": "0.6.3",
   "is_force": false,
   "update_url": "https://github.com/Dukekang0124/zhenxuji/releases/latest/download/zhenxuji-latest.apk",
-  "update_content": "这一版修了一个「你看不见但一直在吃亏」的问题：之前 App 要连的服务器地址，在国内有些网络环境下是连不通的——连不通时系统不会报错，只会悄悄改用本地文案，你以为 AI 偷懒，其实是它压根没连上。这一版把这条通道改从正式域名转发，四种网络环境都实测能通。另外，现在每次出文案都会告诉你「这条是哪家模型写的、等了多久」，不再是一句含糊的「AI 生成」。",
+  "update_content": "这一版换了新图标：桌面上的图标从翻开的册页，换成了「帧」字标——左边黑色的「巾」，右边豆沙色的「贞」，边上一排小方孔是胶片齿孔，说的是把照片一帧一帧串成故事。装上新版后，手机桌面和任务列表里看到的就是它。功能保持上一版：出文案时会告诉你这条是哪家模型写的、等了多久。",
   "update_time": "2026-10",
   "_howto": "update_url 支持两种写法：① 绝对地址，推荐 CI 自动产出的永久稳定地址 https://github.com/<owner>/<repo>/releases/latest/download/zhenxuji-latest.apk（每次发版自动指向最新包，不用改配置）；② 站点根相对路径 /apk/zhenxuji-latest.apk（端侧用「版本源自己的域名」补齐，同一份配置在 pages.dev / 自定义域名下都能用；走这条路要把包放到站点 /apk/ 下，且 _headers 已为 /apk/* 放开跨域）。留空时「检查更新」照常工作，只是点「立即更新」会明确提示暂时没有可用的下载地址。is_force 为 true 时 update_url 必填 —— 强制更新却没有下载地址会把用户卡死，构建期闸门会直接拦下。"
 }

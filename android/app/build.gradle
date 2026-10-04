@@ -25,8 +25,8 @@ android {
         // ⚠️ 历史坑：v0.4.0 出包时这里仍写着 301（= 0.3.1 的码），
         //    版本号没跟着 versionName 走 → 已装 0.3.1 的机器会判定"同版本/降级"，
         //    升级装不上。改 versionName 时必须同步算一次 versionCode。
-        versionCode 602
-        versionName "0.6.2"
+        versionCode 603
+        versionName "0.6.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
