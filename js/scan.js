@@ -38,7 +38,7 @@ export async function scanFiles(files, opts = {}) {
   const {
     existing = [],
     batchSize = 8,
-    thumbSize = 96,
+    thumbSize = 256,
     onProgress = () => {},
     scanner = createScanner(),
     autoDowngrade = true,
@@ -53,7 +53,7 @@ export async function scanFiles(files, opts = {}) {
   const stats = { total: imgs.length, scanned: 0, skipped: known.size, failed: 0, downgraded: false };
 
   let bs = batchSize;
-  let ts = thumbSize;
+  const ts = thumbSize;   // 画质不接受性能降级：thumbSize 恒定，不再随设备变慢而下调
 
   for (let start = 0; start < total; start += bs) {
     if (scanner.isCancelled()) break;
@@ -76,11 +76,14 @@ export async function scanFiles(files, opts = {}) {
     photos.push(...out.filter(Boolean));
     onProgress({ done: stats.scanned, total, batch: out.length, failed: stats.failed });
 
-    // 自动降级：单批超过 3.5s 判定设备吃力
+    // 自动降级：单批超过 3.5s 判定设备吃力。
+    // 🔴 P0 图片画质专项：降级**只允许缩小批大小（性能）**，
+    //    绝不再缩 thumbSize —— 原来这里会把缩略图从 96 一路砍到 48，
+    //    等于"设备一慢就把用户图片压更糊"，正是用户要禁掉的「默认全局有损压缩」。
+    //    画质不接受性能降级；慢可以，糊不行。
     const cost = performance.now() - t0;
     if (autoDowngrade && cost > 3500 && bs > 2) {
       bs = Math.max(2, Math.floor(bs / 2));
-      ts = Math.max(48, Math.round(ts / 2));
       stats.downgraded = true;
     }
     await yieldFrame(); // 让出主线程，UI 不卡死
@@ -129,6 +132,13 @@ async function processOne(file, thumbSize) {
     takenAt: d.takenAt,
     lat: d.lat, lon: d.lon,
     w: d.w, h: d.h,
+    // 🔴🔴 P0 图片画质专项 · 根因修复：
+    //   这里之前**没有挂 `_file`** —— 于是导入后没有任何地方持有原图，
+    //   查看器(srcOf)/导出(loadForExport)/大图预览/批量套用 全部回落到
+    //   96px 缩略图 → 预览与导出全糊。测试之所以全绿，是 seed() 手工塞了 `_file`
+    //   （典型的"测试在说谎"）。原图句柄是 File，只读引用、不复制数据，
+    //   会话内存态、不落盘（stripRuntime 会剥离），撑 1 万张也只是 1 万个句柄。
+    _file: file,
     thumbUrl: canvasToURL(d.thumbCanvas),
     dhash: m.dhash,
     exactHash: m.exactHash,

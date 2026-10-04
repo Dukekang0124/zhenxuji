@@ -10,7 +10,7 @@
 import * as store from './store.js';
 import * as router from './router.js';
 import * as P from './pages.js';
-import { pickPhotos } from './imaging.js';
+import { pickPhotos, clearDisplaySrc } from './imaging.js';
 import { scanFiles, regroup } from './scan.js';
 import { extractTags, narrativeOrder, timeOrder } from './ai.js';
 import { generateStory, resetRegen } from './api.js';
@@ -701,12 +701,17 @@ document.addEventListener('click', async (e) => {
         break;
       }
       case 'clearCache':
+        clearDisplaySrc();   // 释放作品页原图预览的 blobURL 缓存，防泄漏
         store.actions.clearCache();
         store.toast(COPY.cacheTip);
         router.go('create');
         break;
       case 'resetAll':
-        if (confirm('确认清空全部数据？此操作不可恢复')) { store.actions.reset(); router.go('create'); }
+        if (confirm('确认清空全部数据？此操作不可恢复')) {
+          clearDisplaySrc();
+          store.actions.reset();
+          router.go('create');
+        }
         break;
     }
   } catch (err) {

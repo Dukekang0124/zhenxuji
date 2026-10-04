@@ -24,7 +24,8 @@ const DEFAULT_SETTINGS = {
   glmApiKey: '',            // 智谱 API Key（空则本地引擎兜底）
   glmEndpoint: '',          // 自建 Worker 代理地址（可选）
   scanBatchSize: 8,         // 单批扫描张数（性能降级时下调）
-  thumbSize: 96,            // 缩略图边长（内存不足时降采样）
+  thumbSize: 256,           // 缩略图边长。🔴 P0 画质专项：96 在手机上被拉伸就糊/出马赛克，
+                            // 提到 256（仍远小于原图，不落盘原图；原图靠 _file 会话内持有）
   autoDowngrade: true,      // 低端设备自动降级
   theme: 'origin',          // 主题包 key（8 套：scene 场景组 / classic 经典组）
   mode: 'auto',             // 明暗模式（light / dark / auto）—— auto 跟随系统，见 js/app.js
@@ -83,6 +84,16 @@ function load() {
     }
     // settings 缺字段补默认（版本升级兼容）
     state.settings = { ...DEFAULT_SETTINGS, ...(state.settings || {}) };
+    // 🔴 P0 图片画质专项 · 老用户迁移（否则修复等于只对新装生效）：
+    //   上一行是「持久化值覆盖默认值」，老版本存下的 thumbSize:96 会把新的 256 顶掉，
+    //   表现就是「新装的清晰、升级上来的还是糊」—— 修了却没修到人。
+    //   缩略图边长是一条**质量下限**，不是用户偏好（UI 里没有这个开关，它只是内部性能旋钮），
+    //   所以低于下限一律抬到下限，保证任何来源的存量配置都拿不到糊图。
+    //   上限 512 只是配额护栏：thumbUrl 是 dataURL，会整体写进 localStorage。
+    const THUMB_MIN = 256;
+    const THUMB_MAX = 512;
+    const ts0 = Number(state.settings.thumbSize);
+    state.settings.thumbSize = Math.min(THUMB_MAX, Math.max(THUMB_MIN, Number.isFinite(ts0) && ts0 > 0 ? ts0 : THUMB_MIN));
     // 反序列化后只清不可序列化的运行态字段。
     // ⚠️ thumbUrl 是 dataURL（字符串，可持久化）—— 曾被误当 blob URL 清空，
     //    导致重启后缩略图全空。真正不能持久化的只有 _file（File 句柄）。

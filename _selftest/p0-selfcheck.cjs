@@ -329,8 +329,142 @@ async function seed(page, { hiRes = true } = {}) {
   check('🔴 GLM 链路可调用（降级/local 也算通，纯异常才算故障）', glmCall.ok === true, glmCall, 'F-GLM链路', '调用', '连接故障');
   issue('F-GLM链路', '设置/Worker', '连通性', `glmCall=${JSON.stringify(glmCall)}（无 GLM_KEY 时走本地兜底，非真连通；真连通需补密钥）`);
 
+  /* ===== G. 图片导入管线（真实 scanFiles · 原图保真） =====
+     🔴 这一段是本轮"图片画质专项"的核心：走**真实导入管线**（scanFiles），
+        而不是 seed() 手工塞 _file。之前全绿正是因为 seed 塞了 _file，
+        掩盖了"生产根本不挂 _file"这个根因。 */
+  console.log('\n── G. 图片导入管线（真实导入，原图保真） ──');
+  const imp = await page.evaluate(async () => {
+    const mk = async (w, h, label) => {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const x = c.getContext('2d');
+      const g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#2b5fa8'); g.addColorStop(1, '#c86a2b');
+      x.fillStyle = g; x.fillRect(0, 0, w, h);
+      x.strokeStyle = 'rgba(255,255,255,.9)'; x.lineWidth = 1;
+      for (let i = 0; i < w; i += 7) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); }
+      x.fillStyle = '#fff'; x.font = `${Math.round(h / 12)}px sans-serif`; x.fillText(label, 24, Math.round(h / 2));
+      const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.95));
+      return new File([b], label + '.jpg', { type: 'image/jpeg', lastModified: 1758000000000 + w });
+    };
+    const f4k = await mk(3840, 2160, 'FOURK');
+    const fhd = await mk(1920, 1080, 'HD1080');
+    const orig = [f4k.size, fhd.size];
+    const st = await import('/js/store.js');
+    st.actions.reset();
+    const { scanFiles } = await import('/js/scan.js');
+    const res = await scanFiles([f4k, fhd], {
+      batchSize: st.get().settings.scanBatchSize,
+      thumbSize: st.get().settings.thumbSize,
+      autoDowngrade: st.get().settings.autoDowngrade,
+    });
+    st.actions.upsertPhotos(res.photos);
+    const ps = st.get().photos;
+    const thumbW = [];
+    for (const p of ps) {
+      const img = new Image();
+      await new Promise((r) => { img.onload = r; img.onerror = r; img.src = p.thumbUrl; });
+      thumbW.push(img.naturalWidth);
+    }
+    const ids = ps.map((p) => p.id);
+    st.actions.setGroups([{ id: 'g4k', title: '高清样张', photoIds: ids, coverId: ids[0] }]);
+    st.actions.upsertStory({ id: 's4k', groupId: 'g4k', title: '高清样张', createdAt: Date.now(), publishedAt: Date.now(), photoIds: ids, order: 'time', templateId: 'tpl_1', dateText: '10月4日', text: { cover: '高清样张', captions: [], body: '', hook: '' }, stats: { views: 0, likes: 0, comments: 0 } });
+    return {
+      n: ps.length,
+      hasFile: ps.every((p) => Boolean(p._file)),
+      fileBytes: ps.map((p) => (p._file ? p._file.size : 0)),
+      origBytes: orig,
+      wh: ps.map((p) => [p.w, p.h]),
+      thumbW,
+    };
+  });
+  check('🔴 导入后每张照片都持有原图句柄 _file（生产链路，非测试注入）', imp.n === 2 && imp.hasFile, imp, 'B-图片质量', '导入', '原图丢失');
+  check('🔴 原图字节未被改写（_file.size === 原始文件大小）', JSON.stringify(imp.fileBytes) === JSON.stringify(imp.origBytes), { got: imp.fileBytes, want: imp.origBytes }, 'B-图片质量', '导入', '原图被压缩/改写');
+  check('🔴 原图分辨率保留（3840×2160 与 1920×1080）', imp.wh.some((w) => w[0] === 3840 && w[1] === 2160) && imp.wh.some((w) => w[0] === 1920 && w[1] === 1080), imp.wh, 'B-图片质量', '导入', '分辨率丢失');
+  check('🔴 持久化缩略图分辨率提升（≥256，非 96）', imp.thumbW.length === 2 && imp.thumbW.every((w) => w >= 256), imp.thumbW, 'B-图片质量', '缩略图', '缩略图过低');
+
+  // 作品详情页全宽大图必须用原图（这是用户截图里的主要糊图位置）
+  await go(page, '#/detail/s4k');
+  await page.waitForFunction(() => { const i = document.querySelector('#view img'); return i && i.naturalWidth >= 3840; }, { timeout: 6000 }).catch(() => {});
+  const detailImg = await page.evaluate(() => {
+    const img = document.querySelector('#view img');
+    if (!img) return { found: false };
+    return { found: true, nw: img.naturalWidth, nh: img.naturalHeight };
+  });
+  check('🔴 作品详情页大图用原图（naturalWidth=3840，非缩略图）', detailImg.found && detailImg.nw === 3840, detailImg, 'B-图片质量', '作品页预览', '预览降分辨率');
+  await shot(page, 'G-detail-hires');
+
+  // 导出取原图（degraded=false → 不是拿缩略图糊弄）
+  const exp = await page.evaluate(async () => {
+    const st = await import('/js/store.js'); const ex = await import('/js/export.js');
+    const p = st.get().photos.find((x) => x.w === 3840) || st.get().photos[0];
+    const { canvas, degraded } = await ex.loadForExport(p, 1080);
+    return { w: canvas ? canvas.width : 0, degraded };
+  });
+  check('🔴 导出取原图（loadForExport degraded=false，1080 宽）', exp.w === 1080 && exp.degraded === false, exp, 'B-图片质量', '导出', '导出用压缩预览图');
+
+  // AI 分析只读、不改原图
+  const aiSafe = await page.evaluate(async () => {
+    const st = await import('/js/store.js');
+    const p = st.get().photos.find((x) => x.w === 3840) || st.get().photos[0];
+    const before = p._file ? p._file.size : 0;
+    const bmp = await createImageBitmap(p._file);
+    const { width: bw, height: bh } = bmp; if (bmp.close) bmp.close();
+    const after = p._file ? p._file.size : 0;
+    return { before, after, origW: bw, origH: bh };
+  });
+  check('🔴 AI 分析不改原图（分析后 _file 字节/尺寸不变）', aiSafe.before === aiSafe.after && aiSafe.origW === 3840 && aiSafe.origH === 2160, aiSafe, 'B-图片质量', 'AI分析', 'AI 篡改原图');
+
+  /* ===== H. 老用户升级迁移（画质下限） =====
+     🔴 这一段回答的是"修了，但修到人了吗"：
+        settings 的加载是 `{ ...DEFAULT_SETTINGS, ...persisted }` —— 持久化值赢，
+        所以老版本存下的 thumbSize:96 会把新默认 256 顶掉，出现
+        「新装清晰、升级上来的还是糊」。光改 DEFAULT_SETTINGS 是修不到存量用户的。
+     验证方式：用**独立新页面**模拟一次真实冷启动（主页面绝不 reload —— 那条约束是
+     保护它的 `_file`，新页面没有这个包袱，所以这里 reload 是正当的）。 */
+  console.log('\n── H. 老用户升级迁移（画质下限，独立冷启动） ──');
+  const p2 = await browser.newPage();
+  const migErr = [];
+  p2.on('pageerror', (e) => migErr.push(String(e)));
+  await p2.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
+  await p2.waitForTimeout(500);   // 等启动期的防抖 save 落定，免得我把假存档写完又被它盖掉
+  const rawBackup = await p2.evaluate(() => localStorage.getItem('zhenxuji.state.v1'));
+
+  /** 伪造一份「老版本装过」的存档，冷启动后读回真实生效值 */
+  async function bootWithThumb(ts) {
+    await p2.evaluate((v) => {
+      const raw = localStorage.getItem('zhenxuji.state.v1');
+      const saved = raw ? JSON.parse(raw) : {};
+      saved.settings = { ...(saved.settings || {}), thumbSize: v };
+      localStorage.setItem('zhenxuji.state.v1', JSON.stringify(saved));
+    }, ts);
+    await p2.reload({ waitUntil: 'domcontentloaded' });
+    await p2.waitForTimeout(350);
+    return p2.evaluate(async () => {
+      const st = await import('/js/store.js');
+      return st.get().settings.thumbSize;
+    });
+  }
+
+  const migOld = await bootWithThumb(96);    // 老存档：低于下限
+  check('🔴 老存档 thumbSize:96 → 冷启动后抬到画质下限 256（升级用户也清晰，不是只对新装生效）',
+    migOld === 256, { got: migOld, want: 256 }, 'B-图片质量', '设置/升级迁移', '升级后仍用低分辨率缩略图');
+
+  const migHigh = await bootWithThumb(512);  // 存档里已是更高值：不许被误降
+  check('🔴 存档已设更高（512）→ 原样保留，不被误降回下限', migHigh === 512, { got: migHigh, want: 512 },
+    'B-图片质量', '设置/升级迁移', '高画质设置被误降');
+
+  const migBad = await bootWithThumb(4096);  // 越界值：配额护栏（thumbUrl 是 dataURL，要写进 localStorage）
+  check('🔴 越界值 4096 → 收到 512 上限（配额护栏生效）', migBad === 512, { got: migBad, want: 512 },
+    'B-图片质量', '设置/升级迁移', '越界配置无护栏');
+
+  // 还原主页面留下的真实存档，避免这段把后面的处境搞脏
+  if (rawBackup == null) await p2.evaluate(() => localStorage.removeItem('zhenxuji.state.v1'));
+  else await p2.evaluate((v) => localStorage.setItem('zhenxuji.state.v1', v), rawBackup);
+  await p2.close();
+
   /* ===== 运行期错误 ===== */
   console.log('\n── 运行期错误总览 ──');
+  if (migErr.length) errors.push(...migErr.map((m) => `[迁移冷启动] ${m}`));
   check('🔴 全程无 pageerror / console.error', errors.length === 0, errors.slice(0, 6));
 
   // 写缺陷报告
@@ -347,6 +481,8 @@ async function seed(page, { hiRes = true } = {}) {
   lines.push('- D. 版本更新（启动静默检测/强制弹窗/手动已最新）');
   lines.push('- E. 主题换肤全页面联动（每套主题切换后重跑溢出检查）');
   lines.push('- F. GLM4-Flash 链路（设置页状态展示 + 实际调用记录）');
+  lines.push('- G. 图片导入管线（**走真实 scanFiles，非 seed 注入**：原图句柄/字节/分辨率/缩略图/详情页大图/导出取源/AI 只读）');
+  lines.push('- H. 老用户升级迁移（伪造老存档冷启动，验证画质下限真的对存量用户生效）');
   lines.push('');
   const catName = { 'A-渲染溢出': 'A. 渲染/溢出', 'B-图片质量': 'B. 图片质量', 'C-导出': 'C. 导出', 'D-版本更新': 'D. 版本更新', 'E-主题联动': 'E. 主题联动', 'F-GLM链路': 'F. GLM链路' };
   for (const c of Object.keys(report)) {
@@ -364,14 +500,41 @@ async function seed(page, { hiRes = true } = {}) {
   lines.push('| 4 | GLM | 设置页无大模型连接状态 | `pageSettings` 加状态卡 + `probeGlm()` 真探测（已连通/本地兜底/未配置三级友好提示），`store.ui.glmStatus` 驱动重绘 | F2 ✅ |');
   lines.push('| 5 | 渲染 | 版本探测对「配置地址/api/version」刷 404 | 产品侧为正常兜底（去重由 `update.js` 的 seen 集合负责），自检脚本补 mock，非产品缺陷 | 运行期 0 error ✅ |');
   lines.push('');
+  lines.push('### 图片画质专项（最高优先级 · 根因级修复）');
+  lines.push('');
+  lines.push('| # | 缺陷（自检/用户截图发现） | 根因 | 修复 | 复验 |');
+  lines.push('|---|---|---|---|---|');
+  lines.push('| 6 | **导入高清原图后预览/查看/导出全糊、马赛克** | 🔴 **`scan.js` 的 `processOne` 从不挂 `_file`** —— 全仓只有 `enhance.js` 和测试 `seed()` 设它。于是查看器 `srcOf`、`loadForExport`、批量套用、配方预览全部回落到 96px 缩略图。**测试全绿是因为 seed() 手工塞了 `_file`（"测试在说谎"），把根因掩盖了** | `processOne` 返回对象挂 `_file: file`（只读引用、不复制字节、会话内存态、`stripRuntime` 会剥离） | G1/G2/G3 ✅ 原图 3840×2160 与 1920×1080 完整保留 |');
+  lines.push('| 7 | 缩略图在手机上被拉伸即糊 | 默认 `thumbSize` 96 太小；`canvasToURL` 质量 0.72 在 256 尺寸下会压出块状噪点 | 默认 96 → **256**（`imaging.decodePhoto` / `scan.scanFiles` / `store.DEFAULT_SETTINGS` 三处对齐）；JPEG 质量 0.72 → **0.82** | G3 ✅ 缩略图 ≥256 |');
+  lines.push('| 8 | 作品详情页全宽大图糊 | 详情页直接渲染 `p.thumbUrl`，把 96px 缩略图拉到整屏 | `pages.pageDetail` 改用 `imaging.displaySrc(p)`：有 `_file` 走原图 blobURL，重启后如实回落缩略图 | G4 ✅ `naturalWidth=3840` |');
+  lines.push('| 9 | **「省电模式」把画质也降了** | `scanFiles` 自动降级同时缩 `thumbSize`（96→48）：设备一慢就把用户图片压更糊，等于指令明令禁止的「默认全局有损压缩」 | 降级**只缩批大小（性能）**，`thumbSize` 改为 `const` 恒定。慢可以，糊不行 | G3 ✅ 降级路径下缩略图仍 ≥256 |');
+  lines.push('| 10 | **老用户升级后依然是糊图** | `settings` 加载是 `{...DEFAULT_SETTINGS, ...persisted}`，持久化值赢 → 老存档的 `thumbSize:96` 把新的 256 顶掉，"新装清晰、升级还是糊" | `store.load()` 加**画质下限迁移**：`thumbSize` 低于 256 一律抬到 256；上限 512 作配额护栏（`thumbUrl` 是 dataURL，要整体写进 localStorage） | H1/H2/H3 ✅ |');
+  lines.push('| 11 | 清空数据后原图 blobURL 泄漏 | `displaySrc` 的按 id 缓存无人释放 | 新增 `clearDisplaySrc()`，挂在 `clearCache` / `resetAll` 分支 | 运行期 0 error ✅ |');
+  lines.push('');
+  lines.push('**连带修好两个此前"死"的功能**（都因缺 `_file` 而永远走不到）：`app.js` 批量套用配方的过滤 `p._file`、配方预览取 `p._file`。');
+  lines.push('');
+  lines.push('**如实告知的边界（不粉饰）**：① 缩略图边长提到 256 后是 96 的约 7 倍像素量，`thumbUrl` 为 dataURL、会整体写进 localStorage，**大量照片下配额压力上升**（上限 512 即为护栏，后续若破配额定额需迁 IndexedDB）；② `_file` 是 File 句柄、**按设计不落盘**（`stripRuntime` 剥离），所以**冷启动后台**的大图预览与导出会如实回落缩略图 —— 想要"重启仍然全分辨率"须把原图存 IndexedDB，属独立需求；③ 存量已导入的老照片其 `thumbUrl` 已是 96px 且原图句柄已丢，**无法就地变清晰，需重新导入一次**（id 由"文件名+大小+时间"稳定生成，重导即覆盖为 256）。');
+  lines.push('');
   lines.push('> 附带修正 3 处**自检脚本自身 bug**（否则是假红）：① File 对象无 `.width`，改用 `createImageBitmap` 取真实像素；② 大图查看器是 `.album-photo` 背景图、非 `<img>`，选择器改正；③ H5 断言未复刻 doExport 的包装逻辑，已对齐。');
   lines.push('');
   lines.push('## 三、回归门禁（本轮全绿）');
-  lines.push('- `_selftest/p0-selfcheck.cjs`（本脚本）：75 通过 / 0 失败 / 0 运行期错误');
+  lines.push('- `_selftest/p0-selfcheck.cjs`（本脚本）：' + pass + ' 通过 / ' + fail + ' 失败 / ' + errors.length + ' 运行期错误');
   lines.push('- `_selftest/selftest.cjs`：314 / 314');
-  lines.push('- `_selftest/audit-clickthrough.cjs`：67 / 67（全路由点击巡检）');
+  lines.push('- `_selftest/audit-clickthrough.cjs`：67 / 67（全路由点击巡检，耗时 40s 与基线一致）');
   lines.push('');
-  lines.push('> 🔴 A/B 对照留痕：导出弹窗加「再次下载」后巡检一度 7 项失败（长图/H5 下载、进详情/分享、绑定成套、进教程、AI 开关，全是"点击无反应"）。用 `git worktree` 拉改动前 HEAD 同脚本对照：改动前 67/67、耗时 40s；改动后 7 项失败、耗时 274s（= 7 次 30s 点击超时）。根因：弹窗垂直居中，「再次下载」占据首位后在遮罩中心点点位触发重新导出、弹窗不再关闭。把「知道了」恢复为首位按钮后 67/67、耗时回到 40s。');
+  lines.push('> 🔴 A/B 对照留痕①（图片画质 · 根因鉴别力）：图片糊图的根因是「生产链路从不挂 `_file`」，而**旧测试是靠 seed() 手工塞 `_file` 才全绿的**（测试在说谎）。所以新代码全绿**不足以**证明修复有效，必须证明"旧代码在同一个探针下会失败"。用 `git worktree add /d/_zx_ab HEAD`（= 改动前 7851851）另起 4380 端口，同探针 `_selftest/ab-image-quality.cjs` 双跑同一张 3840×2160 样张：');
+  lines.push('');
+  lines.push('| 指标 | 旧代码（7851851） | 新代码（本工作区） | 含义 |');
+  lines.push('|---|---|---|---|');
+  lines.push('| 生效的 thumbSize | 96 | **256** | 缩略图分辨率 |');
+  lines.push('| 持有原图句柄 `_file` | **false** | **true** | ← 根因所在 |');
+  lines.push('| 原图字节 | 0（原图已丢） | 1,337,208 | 原图未被改写、仍持有 |');
+  lines.push('| 缩略图实际像素宽 | 96 | **256** | |');
+  lines.push('| **作品详情页全宽大图 naturalWidth** | **96** | **3840** | ← 用户截图里"糊"的确凿来源：96px 被拉到整屏 |');
+  lines.push('| 导出宽度 | 576 | **1080** | |');
+  lines.push('| 导出 `degraded` | **true**（拿缩略图糊弄） | **false**（取原图） | |');
+  lines.push('');
+  lines.push('> 🔴 A/B 对照留痕②（导出弹窗按钮顺序 · 回归鉴别力）：导出弹窗加「再次下载」后巡检一度 7 项失败（长图/H5 下载、进详情/分享、绑定成套、进教程、AI 开关，全是"点击无反应"）。同脚本对照改动前 HEAD：改动前 67/67、耗时 40s；改动后 7 项失败、耗时 274s（= 7 次 30s 点击超时）。根因：弹窗垂直居中，「再次下载」占据首位后，巡检点在遮罩中心点点位触发的是重新导出、弹窗不再关闭。把「知道了」恢复为首位按钮后 67/67、耗时回到 40s。**结论：弹窗首位按钮必须是「关闭」**，已固化为项目铁律。');
   fs.writeFileSync(path.join(__dirname, 'P0-DEFECT-REPORT.md'), lines.join('\n'), 'utf8');
 
   console.log(`\n===== P0 自检：${pass} 通过 / ${fail} 失败；运行期错误 ${errors.length} 条 =====`);

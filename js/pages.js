@@ -15,6 +15,8 @@ import { paramTags, summaryLine, PREVIEW_TAGS, PARAM_META, PARAM_KEYS, clampPara
 import { KIND_LABEL, fmtWhen } from './exportdl.js';
 // AI 选片增量层（三级分级 / 相似组推荐 / 偏好记忆）
 import { pickLevel, bestOf, similarGroupsOf, prefsOf, levelBadge, reasonChips } from './picker.js';
+// 原图显示源（作品详情页全宽大图用；有 _file 走原图 blobURL，无则回落缩略图）
+import { displaySrc } from './imaging.js';
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -637,11 +639,14 @@ export function pageDetail({ state, param }) {
   return `
     <h1 class="page-title">${esc(s.text?.cover || s.title)}</h1>
     <p class="page-sub">${esc(s.dateText || '')}</p>
-    ${photos.map((p, i) => `
+    ${photos.map((p, i) => {
+      const src = displaySrc(p);   // 原图源（有 _file）/ 缩略图（重启后）；同一张只建一次 blobURL
+      return `
       <figure style="margin:0 0 18px">
-        ${p.thumbUrl ? `<img src="${esc(p.thumbUrl)}" style="border-radius:12px;width:100%" alt="">` : ''}
+        ${src ? `<img src="${esc(src)}" loading="lazy" decoding="async" style="border-radius:12px;width:100%" alt="">` : ''}
         <figcaption class="muted" style="margin-top:6px">${esc(caps[i] || '')}</figcaption>
-      </figure>`).join('')}
+      </figure>`;
+    }).join('')}
     <div class="card"><div class="body">${esc(s.text?.body || '')}</div>
       <div class="muted" style="margin-top:8px">${esc(s.text?.hook || '')}</div></div>
     <div class="row" style="gap:8px">
