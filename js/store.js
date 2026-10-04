@@ -49,7 +49,9 @@ const DEFAULT_SETTINGS = {
  */
 function makeInitial() {
   return {
-    photos: [],       // Photo[]（cv/verdict 持久化，thumbUrl 不持久化）
+    photos: [],       // Photo[]（cv/verdict 持久化；thumbUrl 是 dataURL，**也持久化**——
+                      //   ⚠️ 这句注释曾误写过"不持久化"，并据此清过一次 thumbUrl，导致重启后缩略图全空。
+                      //   真正不持久化的只有 stripRuntime() 清单里的 _file / enhancedUrl）
     groups: [],       // EventGroup[]
     stories: [],      // Story[]
     recipes: [],      // Recipe[]
