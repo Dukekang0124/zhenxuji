@@ -61,6 +61,9 @@ const EXCLUDE = new Set([
   'app-icon-proposals',
   // concept-images/ = 产品概念图（主视觉 / 使用场景 / 核心功能），同样是设计存档。
   'concept-images',
+  // PRODUCT-AUDIT-*.md = 全功能实测审计报告，是过程文档，不进 App 包。
+  // 文件名带日期，用通配不方便，直接排除本次生成的具体文件；后续新增同模式文件需同步。
+  'PRODUCT-AUDIT-2026-10-04.md',
 ]);
 
 /* ── ① 归类断言 ────────────────────────────────────────────── */

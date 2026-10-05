@@ -23,7 +23,9 @@
   "dependencies": {
     "@capacitor/android": "^8.5.1",
     "@capacitor/cli": "^8.5.1",
-    "@capacitor/core": "^8.5.1"
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/filesystem": "^8.1.4",
+    "@m430/capacitor-app-install": "^0.0.3"
   },
   "private": true
 }

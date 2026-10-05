@@ -455,16 +455,96 @@ export function detectApk() {
   return false;
 }
 
+/** 判断是否真正在 Capacitor 原生环境（而不是浏览器/PWA 但 forceApk=1 的测试环境） */
+function isNativeCapacitor() {
+  try {
+    return globalThis.Capacitor?.isNativePlatform?.() === true;
+  } catch (_) { return false; }
+}
+
+/** 把 ArrayBuffer 转成 base64 字符串，供 Filesystem 写二进制文件（不指定 encoding 时传 base64） */
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  if (len === 0) return '';
+  const chunk = 32768; // 避免一次性 String.fromCharCode.apply 参数过多
+  let binary = '';
+  for (let i = 0; i < len; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/**
+ * 在真正的 APK 原生环境里：下载新版 APK → 写到缓存目录 → 调用系统安装器。
+ * 不离开应用（除 Android 系统强制的「允许安装未知应用」设置页）。
+ *
+ * @param {string} url APK 下载地址
+ * @returns {Promise<{ok:boolean, msg:string}>}
+ */
+async function installApkInApp(url) {
+ const Plugins = globalThis.Capacitor?.Plugins;
+  if (!Plugins?.AppInstallPlugin || !Plugins?.Filesystem) {
+    throw new Error('原生安装组件未就绪');
+  }
+
+  const AppInstallPlugin = Plugins.AppInstallPlugin;
+  const Filesystem = Plugins.Filesystem;
+
+  // 1. 检查安装未知应用权限（Android 8+ 必需）
+  const { granted } = await AppInstallPlugin.canInstallUnknownApps();
+  if (!granted) {
+    // 系统会跳到设置页，用户开启后需再点一次「立即更新」
+    await AppInstallPlugin.openInstallUnknownAppsSettings();
+    return { ok: false, msg: '请在系统设置中允许「安装未知应用」后，再次点击立即更新' };
+  }
+
+  // 2. 下载 APK（走 WebView fetch；GitHub Release 下载地址允许跨域）
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`下载失败：HTTP ${res.status}`);
+  const blob = await res.blob();
+  const ab = await blob.arrayBuffer();
+
+  // 3. 写到应用缓存目录（base64 字符串，不指定 encoding，Filesystem 会解码）
+  const fileName = 'zhenxuji-update.apk';
+  await Filesystem.writeFile({
+    path: fileName,
+    directory: 'CACHE',
+    data: arrayBufferToBase64(ab),
+  });
+
+  // 4. 取绝对路径并去掉 file:// 前缀（installApk 需要绝对路径）
+  const uriResult = await Filesystem.getUri({ path: fileName, directory: 'CACHE' });
+  const filePath = String(uriResult?.uri || '').replace(/^file:\/\//, '');
+  if (!filePath) throw new Error('无法取得 APK 文件路径');
+
+  // 5. 触发系统安装器
+  const result = await AppInstallPlugin.installApk({ filePath });
+  return { ok: true, msg: result?.message || '安装器已打开，请确认安装' };
+}
+
 /**
  * 执行更新。
- * APK  → 跳转到下载地址（新窗口，交给系统浏览器/下载器）
+ * APK  → 真正原生环境：应用内下载并安装；测试/PWA：打开下载地址
  * PWA  → 提示刷新页面（Service Worker 接管新资源，刷新即生效）
- * @returns {{mode:'apk'|'pwa', ok:boolean, msg:string}}
+ * @returns {Promise<{mode:'apk'|'pwa', ok:boolean, msg:string}>}
  */
-export function performUpdate(config, inApk) {
+export async function performUpdate(config, inApk) {
   const url = String(config?.updateUrl || '').trim();
   if (inApk) {
     if (!url) return { mode: 'apk', ok: false, msg: '暂时没有可用的下载地址' };
+
+    // 真正 APK 原生环境：走应用内下载安装
+    if (isNativeCapacitor()) {
+      try {
+        const r = await installApkInApp(url);
+        return { mode: 'apk', ok: r.ok, msg: r.msg };
+      } catch (e) {
+        return { mode: 'apk', ok: false, msg: `更新失败：${e.message || '请稍后重试'}` };
+      }
+    }
+
+    // 非原生环境（浏览器测试 / PWA 强制 APK 模式）：保留旧行为，便于测试和兜底
     try {
       window.open(url, '_blank', 'noopener');
       return { mode: 'apk', ok: true, msg: '已经开始下载新版本' };
