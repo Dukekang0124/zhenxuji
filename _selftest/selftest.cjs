@@ -507,6 +507,9 @@ async function makeFiles() {
         ? Math.round((coverRect.height / (coverRect.height + bodyRect.height)) * 100) : null,
       coverOverflow: cover ? getComputedStyle(cover).overflow : null,
       coverRadius: cs('.scard', 'border-radius'),
+      // 当前主题的卡圆角 token：封面卡应消费 --r，而不是写死某个数值
+      // （radiusScales 是刻意的分级变量 compact16/soft20/large22/xl26，换肤就该跟着变）
+      themeCardR: (getComputedStyle(document.documentElement).getPropertyValue('--r') || '').trim(),
       coverVignette: cover ? getComputedStyle(cover, '::after').backgroundImage : null,
       tagRadius: cs('.scard__tag', 'border-radius'),
       tagBg: cs('.scard__tag', 'background-color'),
@@ -528,7 +531,11 @@ async function makeFiles() {
     gal.coverAspect === 1.5 && gal.coverRatio >= 55 && gal.coverRatio <= 70,
     { aspect: gal.coverAspect, coverPct: gal.coverRatio });
   check('封面圆角裁切（overflow:hidden，照片不越界）', gal.coverOverflow === 'hidden', gal.coverOverflow);
-  check('封面卡片圆角 16px（禁止直角）', gal.coverRadius === '16px', gal.coverRadius);
+  // 不能写死 16px：radiusScales 是刻意的分级变量（compact16/soft20/large22/xl26），
+  // 断言「封面卡消费当前主题 --r」+「不是直角/过小圆角」，换肤后才不会误报。
+  check('封面卡片圆角 = 当前主题 --r（禁止直角）',
+    gal.coverRadius === gal.themeCardR && parseInt(gal.coverRadius, 10) >= 12,
+    { coverRadius: gal.coverRadius, themeCardR: gal.themeCardR });
   check('封面有轻微暗角（提升故事氛围）',
     typeof gal.coverVignette === 'string' && gal.coverVignette.includes('radial-gradient'),
     gal.coverVignette);
