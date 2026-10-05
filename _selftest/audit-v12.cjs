@@ -96,8 +96,8 @@ function sec(t) { console.log('\n===== ' + t + ' ====='); }
     // 端侧 normalizeConfig 是否降级
     const cfg = m.normalizeConfig({ latest_version: '0.4.0', is_force: true, update_url: '', update_content: 'x' });
     // PWA 环境下 performUpdate 走到哪条分支
-    const p = m.performUpdate(cfg, false);
-    const pa = m.performUpdate(cfg, true);
+    const p = await m.performUpdate(cfg, false);
+    const pa = await m.performUpdate(cfg, true);
     return { isForce: cfg && cfg.isForce, pwa: p, apk: pa };
   });
   check('端侧 normalizeConfig 对"强制+无地址"降级为可选',

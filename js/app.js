@@ -431,14 +431,15 @@ document.addEventListener('click', async (e) => {
       case 'doUpdate': {
         const st2 = store.get();
         const info = st2.ui.updateModal || st2.ui.updateInfo || {};
-        const r = performUpdate(info.config, info.inApk ?? detectApk());
+        store.setUI({ updateModal: null });   // 先关弹窗，避免用户狂点；失败时上面会重显
+        const r = await performUpdate(info.config, info.inApk ?? detectApk());
         markUpdated();
-        store.setUI({ updateModal: null });
         if (r.mode === 'pwa') {
           store.toast(r.msg);
           // PWA：交给 SW 接管新资源后刷新页面即生效
           setTimeout(() => location.reload(), 900);
         } else {
+          // APK：下载安装是异步过程，结果通过 toast 反馈；保持在本机环境中
           store.toast(r.msg);
         }
         break;
