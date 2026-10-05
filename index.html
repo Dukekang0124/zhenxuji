@@ -14,7 +14,7 @@
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
-<script>window.APP_VERSION = '0.6.5';</script>
+<script>window.APP_VERSION = '0.6.6';</script>
 
 <header class="topbar" id="topbar">
   <div class="brand">
@@ -75,6 +75,21 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- 🔴 synapse 桩：@capacitor/filesystem 的 dist/plugin.js（8.1.4）在 IIFE 入口把
+     一个未定义的全局 `synapse` 当参数传入并调用 `synapse.exposeSynapse()`，
+     若不先建出该全局，整个脚本会在参数求值处抛 ReferenceError，导致
+     Filesystem 永远注册不上 → 应用内更新 installApkInApp 拿不到 Filesystem 而失败。
+     core 8.5.2 并不提供 synapse，故这里用一个无副作用的桩补上（exposeSynapse 仅用于
+     暴露 web 实现，原生调用走 bridge，与桩无关，安全）。必须在 vendor 脚本之前。 -->
+<script>window.synapse = { exposeSynapse() {} };</script>
+
+<!-- 🔴 Capacitor 运行时 + 原生安装插件：必须以经典脚本顺序加载（先于 app.js 模块）。
+     应用内 APK 更新依赖 Capacitor.Plugins.AppInstallPlugin / Filesystem，
+     这俩全局由 capacitor.js + 插件 dist/plugin.js 自注册建出。漏加载 → 更新误判非原生 → window.open 跳出应用。
+     顺序：capacitor.js（建全局）→ filesystem（注册 Filesystem）→ app-install（注册 AppInstallPlugin）→ app.js(module) -->
+<script src="/vendor/capacitor.js"></script>
+<script src="/vendor/filesystem-plugin.js"></script>
+<script src="/vendor/app-install-plugin.js"></script>
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>

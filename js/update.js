@@ -455,13 +455,6 @@ export function detectApk() {
   return false;
 }
 
-/** 判断是否真正在 Capacitor 原生环境（而不是浏览器/PWA 但 forceApk=1 的测试环境） */
-function isNativeCapacitor() {
-  try {
-    return globalThis.Capacitor?.isNativePlatform?.() === true;
-  } catch (_) { return false; }
-}
-
 /** 把 ArrayBuffer 转成 base64 字符串，供 Filesystem 写二进制文件（不指定 encoding 时传 base64） */
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -525,7 +518,10 @@ async function installApkInApp(url) {
 
 /**
  * 执行更新。
- * APK  → 真正原生环境：应用内下载并安装；测试/PWA：打开下载地址
+ * APK  → 应用内下载并唤起系统安装器（全程留在应用内，不跳浏览器/外部 app）。
+ *        🔴 绝不使用 window.open 兜底：那会把用户弹到系统浏览器/下载器/第三方 app，
+ *          正是「点立即更新跳出应用」的元凶。原生安装组件未就绪或失败，只弹 toast 说明，
+ *          留在应用内等下次重试（组件已随 capacitor.js + 插件脚本打进包，正常必可用）。
  * PWA  → 提示刷新页面（Service Worker 接管新资源，刷新即生效）
  * @returns {Promise<{mode:'apk'|'pwa', ok:boolean, msg:string}>}
  */
@@ -533,23 +529,12 @@ export async function performUpdate(config, inApk) {
   const url = String(config?.updateUrl || '').trim();
   if (inApk) {
     if (!url) return { mode: 'apk', ok: false, msg: '暂时没有可用的下载地址' };
-
-    // 真正 APK 原生环境：走应用内下载安装
-    if (isNativeCapacitor()) {
-      try {
-        const r = await installApkInApp(url);
-        return { mode: 'apk', ok: r.ok, msg: r.msg };
-      } catch (e) {
-        return { mode: 'apk', ok: false, msg: `更新失败：${e.message || '请稍后重试'}` };
-      }
-    }
-
-    // 非原生环境（浏览器测试 / PWA 强制 APK 模式）：保留旧行为，便于测试和兜底
+    // APK：应用内下载并安装，任何失败都如实告知、留在应用内（不跳走）
     try {
-      window.open(url, '_blank', 'noopener');
-      return { mode: 'apk', ok: true, msg: '已经开始下载新版本' };
+      const r = await installApkInApp(url);
+      return { mode: 'apk', ok: r.ok, msg: r.msg };
     } catch (e) {
-      return { mode: 'apk', ok: false, msg: '没能打开下载页面，请稍后再试' };
+      return { mode: 'apk', ok: false, msg: `更新失败：${e.message || '请稍后重试'}` };
     }
   }
   // 🔴 PWA 端同样要验地址：没有下载地址就只刷新 = 什么都没更新，

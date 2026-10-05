@@ -86,6 +86,31 @@ for (const f of FILES) {
   catch (e) { console.warn('skip missing file:', f); }
 }
 
+/* ── Capacitor 运行时 + 原生插件脚本（应用内更新依赖）─────────────────
+ * 🔴 为什么必须手动拷：capacitor.config 里 bundledWebRuntime=false，且本项目是无构建
+ *    ESM 应用（index.html 不引 capacitor.js）。但「应用内 APK 安装」依赖
+ *    `Capacitor.Plugins.AppInstallPlugin` / `Filesystem`，这两个全局是由
+ *    capacitor.js（运行时）+ 插件 dist/plugin.js（自注册）建出来的。
+ *    不加载它们 → Capacitor 全局为 undefined → 更新逻辑误判「非原生」→ 走
+ *    window.open 兜底跳出应用（2026-10-05 实测的根因）。
+ *    所以这里把三份脚本拷进 www/vendor/，由 index.html 以经典脚本顺序加载：
+ *      capacitor.js → filesystem-plugin.js → app-install-plugin.js → app.js(module)
+ *    依赖闭包校验会检查 index.html 的 <script src> 是否都在包内，故必须先于此步拷入。 */
+const VENDOR = [
+  ['node_modules/@capacitor/core/dist/capacitor.js', 'vendor/capacitor.js'],
+  ['node_modules/@capacitor/filesystem/dist/plugin.js', 'vendor/filesystem-plugin.js'],
+  ['node_modules/@m430/capacitor-app-install/dist/plugin.js', 'vendor/app-install-plugin.js'],
+];
+await mkdir(path.join(out, 'vendor'), { recursive: true });
+let vendorOk = 0;
+for (const [from, to] of VENDOR) {
+  const fp = path.join(src, from);
+  if (!existsSync(fp)) throw new Error(`原生更新依赖缺失（请先 npm install）：${from}`);
+  await cp(fp, path.join(out, to));
+  vendorOk++;
+}
+console.log(`[build:web] Capacitor 运行时 + 安装插件已就位 — ${vendorOk} 个 vendor 脚本`);
+
 /* ── ② 行尾规范化 LF ────────────────────────────────────────── */
 const TEXT_EXT = /\.(html?|js|mjs|cjs|json|webmanifest|css|txt|xml|md|svg)$/i;
 let normalized = 0;
