@@ -610,7 +610,7 @@ const dup = await page.evaluate(async () => {
   console.log('\n── 四主题 + 暗色 ──');
   await page.goto(`${BASE}/index.html#/recipes`, { waitUntil: 'networkidle' });
   await fresh(page);
-  for (const th of ['origin', 'forest', 'film', 'sweet']) {
+  for (const th of ['origin', 'forest', 'film', 'sweet', 'warmth']) {
     await page.evaluate(async (t) => { (await import('/js/store.js')).actions.setTheme(t); }, th);
     await page.waitForTimeout(280);
     const p = await page.evaluate(() => {

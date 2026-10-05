@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS = {
   thumbSize: 256,           // 缩略图边长。🔴 P0 画质专项：96 在手机上被拉伸就糊/出马赛克，
                             // 提到 256（仍远小于原图，不落盘原图；原图靠 _file 会话内持有）
   autoDowngrade: true,      // 低端设备自动降级
-  theme: 'origin',          // 主题包 key（8 套：scene 场景组 / classic 经典组）
+  theme: 'warmth',          // 主题包 key（9 套：scene 场景组 4 + classic 经典组 5，温润本色为默认）
   mode: 'auto',             // 明暗模式（light / dark / auto）—— auto 跟随系统，见 js/app.js
 };
 
