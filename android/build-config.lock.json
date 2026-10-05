@@ -3,7 +3,7 @@
   "_why": "方案 A 的核心前提是 CI 与本地跑同一份构建配置；本文件把该前提变成可校验的事实。",
   "_howto": "改过任何受管控配置后，必须显式跑 `npm run bless:android` 重建基准，并连同代码一起提交评审。普通构建路径不会自动重建（否则闸门退化成自我证明）。",
   "_note": "app/build.gradle 的 versionCode/versionName 已被抹平为 <STAMPED>，因为 CI 会按 tag 合法改写它们；其余每一个字节都受保护。",
-  "generated_at": "2026-10-05T01:10:49.474Z",
+  "generated_at": "2026-10-05T09:09:38.675Z",
   "files": [
     {
       "path": "android/app/build.gradle",
