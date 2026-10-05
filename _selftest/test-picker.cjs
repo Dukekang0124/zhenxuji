@@ -312,7 +312,7 @@ const PHOTOS = [
   await page.goto(`${BASE}/index.html#/pick/g-pick`, { waitUntil: 'networkidle' });
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(500);
-  const THEMES = ['origin', 'forest', 'film', 'sweet'];
+  const THEMES = ['origin', 'forest', 'film', 'sweet', 'warmth'];
   const themePaint = {};
   for (const th of THEMES) {
     await page.evaluate(async (t) => {
@@ -340,11 +340,11 @@ const PHOTOS = [
   }
   // 四套主题的徽章底色必须互不相同（否则说明只换了大背景、组件没跟着换）
   const colors = new Set(Object.values(themePaint).map((p) => p.badgeColor));
-  check('🔴 四套主题徽章底色互不相同（组件真跟主题走，非只换背景）', colors.size === 4, [...colors]);
+  check('🔴 五套主题徽章底色互不相同（组件真跟主题走，非只换背景）', colors.size === THEMES.length, [...colors]);
   await page.screenshot({ path: path.join(OUT, '_shot_pick_theme.png'), fullPage: true });
 
   // 暗色模式同样核查（白底压白字类缺陷只在这里现形）
-  for (const th of ['origin', 'sweet']) {
+  for (const th of ['origin', 'sweet', 'warmth']) {
     await page.evaluate(async (t) => {
       const st = await import('/js/store.js');
       st.actions.setMode('dark');

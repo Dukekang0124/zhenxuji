@@ -12,7 +12,7 @@
     "group: scene = 场景主题（新四套，女性向场景化），classic = 经典主题（V1.5 四套，素雅耐看）",
     "defaultMode: auto = 跟随系统亮暗；也可强制 light / dark"
   ],
-  "defaultPack": "origin",
+  "defaultPack": "warmth",
   "defaultMode": "auto",
   "radiusScales": {
     "compact": {
@@ -281,7 +281,7 @@
     {
       "key": "origin",
       "name": "原初·清简",
-      "isDefault": true,
+      "isDefault": false,
       "tagline": "极简高级，最像一本还没写字的册子",
       "scenes": [
         "日常记录",
@@ -810,6 +810,74 @@
             "muted": "#B79C82",
             "onBrand": "#191310",
             "alert": "#E4917A"
+          }
+        }
+      }
+    },
+    {
+      "key": "warmth",
+      "group": "classic",
+      "name": "温润本色",
+      "isDefault": true,
+      "tagline": "暖棕主色 + 米白纸底，克制而温润的高级感",
+      "scenes": [
+        "日常记录",
+        "人像写真",
+        "旅途光影"
+      ],
+      "iconStyle": "hand-line",
+      "navStyle": "solid-light",
+      "fontSet": "rounded-soft",
+      "radiusScale": "soft",
+      "storyTemplate": "minimal-ins",
+      "shadow": {
+        "light": {
+          "base": 0.06,
+          "lift": 0.1
+        },
+        "dark": {
+          "base": 0.5,
+          "lift": 0.6
+        }
+      },
+      "launch": {
+        "style": "paper-plain",
+        "titleWeight": 500,
+        "showMark": true
+      },
+      "desktopIcon": "icon-warmth",
+      "texture": "paper-grain",
+      "cardStyle": "soft-lift",
+      "motion": "calm",
+      "modes": {
+        "light": {
+          "colors": {
+            "paper": "#F8F2EB",
+            "brand": "#95523C",
+            "accent": "#E8C8B2",
+            "ink": "#2B2420",
+            "ink2": "#6E5F54",
+            "line": "#E0D3C3",
+            "card": "#FFFDFA",
+            "privacyBg": "#F1E7DB",
+            "muted": "#6E5F54",
+            "onBrand": "#FFFDFA",
+            "alert": "#9E4632"
+          }
+        },
+        "dark": {
+          "colors": {
+            "paper": "#1C1714",
+            "brand": "#D9A98C",
+            "accent": "#B98B6E",
+            "ink": "#F5ECE3",
+            "ink2": "#B7A596",
+            "line": "#352D27",
+            "card": "#251F1B",
+            "privacyBg": "#221B17",
+            "muted": "#B7A596",
+            "onBrand": "#1C1714",
+            "alert": "#E59A82"
           }
         }
       }

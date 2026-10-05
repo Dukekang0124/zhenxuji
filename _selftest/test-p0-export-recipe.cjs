@@ -311,7 +311,7 @@ const PHOTOS = [
   await page.goto(`${BASE}/index.html#/recipes`, { waitUntil: 'networkidle' });
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(450);
-  for (const th of ['origin', 'forest', 'film', 'sweet']) {
+  for (const th of ['origin', 'forest', 'film', 'sweet', 'warmth']) {
     await page.evaluate(async (t) => { (await import('/js/store.js')).actions.setTheme(t); }, th);
     await page.waitForTimeout(300);
     const p = await page.evaluate(() => {

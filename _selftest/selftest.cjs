@@ -1212,11 +1212,11 @@ async function makeFiles() {
   });
   const paperOf = Object.fromEntries(themeModel.papers.map((p) => [p.key, p.paper]));
   const paperOfDark = Object.fromEntries(themeModel.papersDark.map((p) => [p.key, p.paper]));
-  const themeKeys = themeModel.keys;        // 8 套主题 key（按主题表顺序）
+  const themeKeys = themeModel.keys;        // 9 套主题 key（按主题表顺序）
   const defaultTheme = themeModel.def;      // 不写死：默认主题是可配置项
-  check('内置 8 套主题（scene 场景组 4 + classic 经典组 4），顺序稳定',
-    themeModel.n === 8
-    && JSON.stringify(themeModel.keys) === JSON.stringify(['origin', 'forest', 'film', 'sweet', 'paper', 'cream', 'magazine', 'retro'])
+  check('内置 9 套主题（scene 场景组 4 + classic 经典组 5），顺序稳定',
+    themeModel.n === 9
+    && JSON.stringify(themeModel.keys) === JSON.stringify(['origin', 'forest', 'film', 'sweet', 'paper', 'cream', 'magazine', 'retro', 'warmth'])
     && themeKeys.includes(defaultTheme), [themeModel.keys, defaultTheme]);
   check('两套分组都在（场景主题 / 经典主题）',
     JSON.stringify(themeModel.groups) === JSON.stringify(['classic', 'scene']), themeModel.groups);
@@ -1230,7 +1230,7 @@ async function makeFiles() {
   const cssOrder = await page.evaluate(async () => {
     const txt = await (await fetch('/styles.css')).text();
     const iRoot = txt.indexOf('\n:root{');
-    const keys = ['origin', 'forest', 'film', 'sweet', 'paper', 'cream', 'magazine', 'retro'];
+    const keys = ['origin', 'forest', 'film', 'sweet', 'paper', 'cream', 'magazine', 'retro', 'warmth'];
     const lightIdx = keys.map((k) => txt.indexOf(`[data-theme='${k}']{`));
     const darkIdx = keys.map((k) => txt.indexOf(`[data-theme='${k}'][data-mode='dark']{`));
     return {
@@ -1241,8 +1241,8 @@ async function makeFiles() {
       darkMissing: darkIdx.filter((i) => i < 0).length,
     };
   });
-  check('🔴 8 套浅色块 + 8 套暗色块全部排在 :root 之后（否则主题根本不生效）',
-    cssOrder.iRoot > 0 && cssOrder.lightOK === 8 && cssOrder.darkOK === 8
+  check('🔴 9 套浅色块 + 9 套暗色块全部排在 :root 之后（否则主题根本不生效）',
+    cssOrder.iRoot > 0 && cssOrder.lightOK === 9 && cssOrder.darkOK === 9
     && cssOrder.lightMissing === 0 && cssOrder.darkMissing === 0, cssOrder);
 
   /* M3. 全局联动：切一套主题，页头 Logo / 底部导航 / 页面底色 / 状态栏色必须一起变 */
@@ -1418,10 +1418,10 @@ async function makeFiles() {
       tech: /GLM|Worker|降级|缓存|API|token/.test(document.getElementById('view').textContent),
     };
   });
-  check('主题页渲染全部 8 张主题卡（scene 4 + classic 4），顺序与主题表一致',
-    themePageUI.n === 8
+  check('主题页渲染全部 9 张主题卡（scene 4 + classic 5），顺序与主题表一致',
+    themePageUI.n === 9
     && JSON.stringify(themePageUI.ids) === JSON.stringify(themePageUI.wantKeys)
-    && JSON.stringify(themePageUI.ids) === JSON.stringify(['origin', 'forest', 'film', 'sweet', 'paper', 'cream', 'magazine', 'retro']),
+    && JSON.stringify(themePageUI.ids) === JSON.stringify(['origin', 'forest', 'film', 'sweet', 'paper', 'cream', 'magazine', 'retro', 'warmth']),
     themePageUI.ids);
   check('主题页按分组分区（场景主题 / 经典主题 两个小标题都在）',
     themePageUI.groups.filter((g) => /主题/.test(g)).length >= 2, themePageUI.groups);
@@ -1591,7 +1591,7 @@ async function makeFiles() {
   const noVar = mustVar.filter((s) => { const b = ruleBody(s); return !b || !b.includes('var(--'); });
   check('🔴 顶栏/导航/开关/Toast/按钮 全部结构性依赖 CSS 变量', noVar.length === 0, noVar);
 
-  /* M10. 截图证据：8 套主题各拍一张 + 一张暗色版
+  /* M10. 截图证据：9 套主题各拍一张 + 一张暗色版
      🔴 必须**真点卡片**而不是直接调 action：action 只触发 store 订阅（换底色），
         不会重绘主题页（勾选描边要 render 才更新）—— 直接调拍出来的是「底色是 A、
         勾选停在 B」的假证据图（已踩）。
@@ -1657,7 +1657,7 @@ async function makeFiles() {
         界面都只是"看着还行"，静态检查一个字都看不出来。实测踩到的两个真例：
           · 配置写 delta=0.03（听着很克制），生成器却烘了 opacity=0.5 的 multiply 噪声，
             真渲染的等效偏移是 0.31 —— 二级文字从 4.5 掉到 3.0，而当时的闸门全绿；
-          · .chip 的圆角硬编码 8px，而 --r-chip 在 8 套主题里全都有值却没有任何元素读它，
+          · .chip 的圆角硬编码 8px，而 --r-chip 在 9 套主题里全都有值却没有任何元素读它，
             于是"换主题 chip 也跟着变"这句话是假的。
         并且一律跨三套主题对比：只有"两套主题量出来**不一样**"，才能证明它真跟着配置走，
         而不是碰巧等于某个硬编码常量（这是本区最重要的鉴别力来源）。 */
@@ -1699,7 +1699,7 @@ async function makeFiles() {
   };
 
   const tripleSeen = [];
-  for (const key of ['origin', 'forest', 'film']) {
+  for (const key of ['origin', 'forest', 'film', 'warmth']) {
     const pk = packByKey(key);
     const tex = packsJson.textures[pk.texture];
     const card = packsJson.cardStyles[pk.cardStyle];
